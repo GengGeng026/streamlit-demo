@@ -13,10 +13,12 @@ PARENT_RELATION_PROPERTY = 'Parent Hab'
 
 # Function to validate Notion API Token
 def is_valid_token(token):
+    # Example validation, you might need to adjust based on real validation rules
     return len(token) >= 20
 
 # Function to validate Notion Database ID
 def is_valid_database_id(database_id):
+    # Example validation, you might need to adjust based on real validation rules
     return len(database_id) == 32
 
 class NotionDataVisualizer:
@@ -32,8 +34,6 @@ class NotionDataVisualizer:
             self.token = st.text_input("请输入Notion API Token:", key='token', placeholder='请输入有效的 API Token', help="确保 Token 长度符合要求")
             self.database_id = st.text_input("请输入Notion数据库ID:", key='database_id', placeholder='请输入有效的数据库 ID', help="确保数据库 ID 长度符合要求")
             self.show_save_button()
-        else:
-            st.success("配置已加载")
 
     def save_config(self):
         if self.token and self.database_id:
@@ -42,7 +42,6 @@ class NotionDataVisualizer:
                 f.write(f"NOTION_HABITS_DATABASE_ID={self.database_id}\n")
             st.success("配置已保存到 .env 文件中")
             self.is_configured = True
-            st.rerun()
 
     def show_save_button(self):
         if is_valid_token(self.token) and is_valid_database_id(self.database_id):
@@ -87,7 +86,7 @@ class NotionDataVisualizer:
         total_minutes = 0
         async with aiohttp.ClientSession() as session:
             tasks = []
-            for result in data['results']:
+            for i, result in enumerate(data['results']):
                 parent = result['properties'].get(PARENT_RELATION_PROPERTY, {})
                 total_mins = result['properties'].get(TOTAL_ELAPSED_TIME_NOTION_NAME, {}).get('rollup', {}).get('number', 0)
 
@@ -123,23 +122,27 @@ class NotionDataVisualizer:
         fig.update_layout(
             title_text="Notion Habits Visualization",
             template='plotly',
-            showlegend=True,
+            showlegend=True,  # 显示图例
             legend=dict(
-                orientation="v",
-                xanchor="left",
-                x=1.05,
-                y=1
+                orientation="v",  # 垂直排列
+                xanchor="left",  # 图例位置
+                x=1.05,  # 图例右侧位置
+                y=1  # 图例顶部位置
             )
         )
         return fig
 
-    async def generate_visualization(self):
-        raw_data = await self.get_notion_data()
-        if raw_data:
-            processed_data, total_minutes = await self.process_data(raw_data)
-            fig = self.visualize_data(processed_data, total_minutes)
-            return fig
-        return None
+async def main():
+    visualizer = NotionDataVisualizer()
+    if not visualizer.is_configured:
+        return None, None
+    
+    raw_data = await visualizer.get_notion_data()
+    if raw_data:
+        processed_data, total_minutes = await visualizer.process_data(raw_data)
+        fig = visualizer.visualize_data(processed_data, total_minutes)
+        return fig, None  # Returning fig and None as a tuple
+    return None, None
 
 # Streamlit app
 st.title("Notion Data Visualization")
@@ -148,35 +151,96 @@ st.title("Notion Data Visualization")
 custom_css = """
 <style>
 input#token:valid, input#database_id:valid {
-    border-color: #00FF00;
+    border-color: #00FF00; /* Green color when valid */
 }
 input#token:invalid, input#database_id:invalid {
-    border-color: #FF0000;
+    border-color: #FF0000; /* Red color when invalid */
 }
 </style>
 """
-st.markdown(custom_css, unsafe_allow_html=True)
 
-# Initialize visualizer
-visualizer = NotionDataVisualizer()
+# Apply custom CSS
+st.markdown(custom_css, unsafe_allow_html=True)
 
 # Initialize session state
 if 'show_loader' not in st.session_state:
     st.session_state.show_loader = False
 
-if visualizer.is_configured:
-    if st.button("Generate Visualization"):
-        st.session_state.show_loader = True
-        st.rerun()
-
-# Handle loader logic and visualization generation
+# Handle loader logic
 if st.session_state.show_loader:
-    with st.spinner("正在生成可视化..."):
-        fig = asyncio.run(visualizer.generate_visualization())
-    
+    loader_container = st.empty()
+    custom_loader = """
+    <style>
+    @keyframes wave {
+      0% { transform: translateY(0); }
+      50% { transform: translateY(-20px); }
+      100% { transform: translateY(0); }
+    }
+    @keyframes fadeOut {
+      0% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    .emoji-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: rgba(0, 0, 0, 0.5); /* Dark background for dark mode */
+      z-index: 9999;
+      transition: opacity 1s ease-out;
+    }
+    .emoji {
+      font-size: 50px;
+      animation: wave 1.5s infinite;
+    }
+    .emoji:nth-child(2) {
+      animation-delay: 0.3s;
+    }
+    .emoji:nth-child(3) {
+      animation-delay: 0.6s;
+    }
+    </style>
+    <div class="emoji-container" id="loader">
+      <div class="emoji">🌊</div>
+      <div class="emoji">🌊</div>
+      <div class="emoji">🌊</div>
+    </div>
+    <script>
+    function hideLoader() {
+        const loader = document.getElementById('loader');
+        loader.style.opacity = '0';
+        setTimeout(function() {
+            loader.style.display = 'none';
+        }, 1000); // Match this time with the CSS fade-out duration
+    }
+    function showLoader() {
+        const loader = document.getElementById('loader');
+        loader.style.display = 'flex';
+        loader.style.opacity = '1';
+    }
+    window.addEventListener('load', showLoader);
+    </script>
+    """
+    loader_container.markdown(custom_loader, unsafe_allow_html=True)
+    fig, error_msg = asyncio.run(main())
+    if isinstance(fig, tuple):
+        fig, error_msg = fig
+    else:
+        error_msg = None
+
     if fig:
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.error("数据处理失败，请检查 API 配置和数据。")
-    
+    loader_container.markdown("<script>document.getElementById('loader').style.opacity = '0'; setTimeout(function() { document.getElementById('loader').style.display = 'none'; }, 1000);</script>", unsafe_allow_html=True)
     st.session_state.show_loader = False
+else:
+    visualizer = NotionDataVisualizer()
+    if visualizer.is_configured:
+        if st.button("Generate Visualization"):
+            st.session_state.show_loader = True
+            st.rerun()
