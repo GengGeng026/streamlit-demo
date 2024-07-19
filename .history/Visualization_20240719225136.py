@@ -141,7 +141,7 @@ async def main():
     if raw_data:
         processed_data, total_minutes = await visualizer.process_data(raw_data)
         fig = visualizer.visualize_data(processed_data, total_minutes)
-        return fig, None  # Returning fig and None as a tuple
+        return fig
     return None, None
 
 # Streamlit app

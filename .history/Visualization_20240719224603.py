@@ -13,12 +13,10 @@ PARENT_RELATION_PROPERTY = 'Parent Hab'
 
 # Function to validate Notion API Token
 def is_valid_token(token):
-    # Example validation, you might need to adjust based on real validation rules
     return len(token) >= 20
 
 # Function to validate Notion Database ID
 def is_valid_database_id(database_id):
-    # Example validation, you might need to adjust based on real validation rules
     return len(database_id) == 32
 
 class NotionDataVisualizer:
@@ -27,21 +25,16 @@ class NotionDataVisualizer:
         self.token = os.getenv("NOTION_API_KEY")
         self.database_id = os.getenv("NOTION_HABITS_DATABASE_ID")
         self.proxy_url = os.getenv("PROXY_URL")
-
         self.is_configured = self.token and self.database_id
-
-        if not self.is_configured:
-            self.token = st.text_input("请输入Notion API Token:", key='token', placeholder='请输入有效的 API Token', help="确保 Token 长度符合要求")
-            self.database_id = st.text_input("请输入Notion数据库ID:", key='database_id', placeholder='请输入有效的数据库 ID', help="确保数据库 ID 长度符合要求")
-            self.show_save_button()
 
     def save_config(self):
         if self.token and self.database_id:
             with open('.env', 'w') as f:
                 f.write(f"NOTION_API_KEY={self.token}\n")
                 f.write(f"NOTION_HABITS_DATABASE_ID={self.database_id}\n")
+            st.session_state.config_saved = True
+            st.session_state.show_loader = False
             st.success("配置已保存到 .env 文件中")
-            self.is_configured = True
 
     def show_save_button(self):
         if is_valid_token(self.token) and is_valid_database_id(self.database_id):
@@ -122,17 +115,17 @@ class NotionDataVisualizer:
         fig.update_layout(
             title_text="Notion Habits Visualization",
             template='plotly',
-            showlegend=True,  # 显示图例
+            showlegend=True,
             legend=dict(
-                orientation="v",  # 垂直排列
-                xanchor="left",  # 图例位置
-                x=1.05,  # 图例右侧位置
-                y=1  # 图例顶部位置
+                orientation="v",
+                xanchor="left",
+                x=1.05,
+                y=1
             )
         )
         return fig
 
-async def main():
+async def run_visualizer():
     visualizer = NotionDataVisualizer()
     if not visualizer.is_configured:
         return None, None
@@ -141,7 +134,7 @@ async def main():
     if raw_data:
         processed_data, total_minutes = await visualizer.process_data(raw_data)
         fig = visualizer.visualize_data(processed_data, total_minutes)
-        return fig, None  # Returning fig and None as a tuple
+        return fig
     return None, None
 
 # Streamlit app
@@ -163,10 +156,11 @@ input#token:invalid, input#database_id:invalid {
 st.markdown(custom_css, unsafe_allow_html=True)
 
 # Initialize session state
+if 'config_saved' not in st.session_state:
+    st.session_state.config_saved = False
 if 'show_loader' not in st.session_state:
     st.session_state.show_loader = False
 
-# Handle loader logic
 if st.session_state.show_loader:
     loader_container = st.empty()
     custom_loader = """
@@ -226,21 +220,25 @@ if st.session_state.show_loader:
     </script>
     """
     loader_container.markdown(custom_loader, unsafe_allow_html=True)
-    fig, error_msg = asyncio.run(main())
-    if isinstance(fig, tuple):
-        fig, error_msg = fig
-    else:
-        error_msg = None
-
+    fig, error_msg = await run_visualizer()
     if fig:
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.error("数据处理失败，请检查 API 配置和数据。")
+    # Hide the loader with a delay
     loader_container.markdown("<script>document.getElementById('loader').style.opacity = '0'; setTimeout(function() { document.getElementById('loader').style.display = 'none'; }, 1000);</script>", unsafe_allow_html=True)
     st.session_state.show_loader = False
 else:
-    visualizer = NotionDataVisualizer()
-    if visualizer.is_configured:
-        if st.button("Generate Visualization"):
-            st.session_state.show_loader = True
-            st.rerun()
+    # Configure input fields and button
+    with st.container() as config_container:
+        token = st.text_input("请输入Notion API Token:", key='token', placeholder='请输入有效的 API Token', help="确保 Token 长度符合要求")
+        database_id = st.text_input("请输入Notion数据库ID:", key='database_id', placeholder='请输入有效的数据库 ID', help="确保数据库 ID 长度符合要求")
+
+        visualizer = NotionDataVisualizer()
+        visualizer.token = token
+        visualizer.database_id = database_id
+
+        if st.button("保存配置"):
+            visualizer.save_config()
+            if st.session_state.config_saved:
+                st.experimental_rerun()

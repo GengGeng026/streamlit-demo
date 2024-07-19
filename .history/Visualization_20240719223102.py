@@ -13,27 +13,23 @@ PARENT_RELATION_PROPERTY = 'Parent Hab'
 
 # Function to validate Notion API Token
 def is_valid_token(token):
-    # Example validation, you might need to adjust based on real validation rules
     return len(token) >= 20
 
 # Function to validate Notion Database ID
 def is_valid_database_id(database_id):
-    # Example validation, you might need to adjust based on real validation rules
     return len(database_id) == 32
 
 class NotionDataVisualizer:
     def __init__(self):
         load_dotenv()
-        self.token = os.getenv("NOTION_API_KEY")
-        self.database_id = os.getenv("NOTION_HABITS_DATABASE_ID")
+        self.token = st.session_state.get("token", os.getenv("NOTION_API_KEY", ""))
+        self.database_id = st.session_state.get("database_id", os.getenv("NOTION_HABITS_DATABASE_ID", ""))
         self.proxy_url = os.getenv("PROXY_URL")
 
-        self.is_configured = self.token and self.database_id
+        self.is_configured = bool(self.token and self.database_id)
 
         if not self.is_configured:
-            self.token = st.text_input("请输入Notion API Token:", key='token', placeholder='请输入有效的 API Token', help="确保 Token 长度符合要求")
-            self.database_id = st.text_input("请输入Notion数据库ID:", key='database_id', placeholder='请输入有效的数据库 ID', help="确保数据库 ID 长度符合要求")
-            self.show_save_button()
+            self.show_input_fields()
 
     def save_config(self):
         if self.token and self.database_id:
@@ -41,9 +37,17 @@ class NotionDataVisualizer:
                 f.write(f"NOTION_API_KEY={self.token}\n")
                 f.write(f"NOTION_HABITS_DATABASE_ID={self.database_id}\n")
             st.success("配置已保存到 .env 文件中")
-            self.is_configured = True
 
-    def show_save_button(self):
+            # Update session state and reload the page to reflect the changes
+            st.session_state.is_configured = True
+            st.session_state.token = self.token
+            st.session_state.database_id = self.database_id
+            st.experimental_rerun()
+
+    def show_input_fields(self):
+        self.token = st.text_input("请输入Notion API Token:", value=self.token, key='token', placeholder='请输入有效的 API Token', help="确保 Token 长度符合要求")
+        self.database_id = st.text_input("请输入Notion数据库ID:", value=self.database_id, key='database_id', placeholder='请输入有效的数据库 ID', help="确保数据库 ID 长度符合要求")
+
         if is_valid_token(self.token) and is_valid_database_id(self.database_id):
             if st.button("保存配置"):
                 self.save_config()
@@ -122,12 +126,12 @@ class NotionDataVisualizer:
         fig.update_layout(
             title_text="Notion Habits Visualization",
             template='plotly',
-            showlegend=True,  # 显示图例
+            showlegend=True,
             legend=dict(
-                orientation="v",  # 垂直排列
-                xanchor="left",  # 图例位置
-                x=1.05,  # 图例右侧位置
-                y=1  # 图例顶部位置
+                orientation="v",
+                xanchor="left",
+                x=1.05,
+                y=1
             )
         )
         return fig
@@ -141,7 +145,7 @@ async def main():
     if raw_data:
         processed_data, total_minutes = await visualizer.process_data(raw_data)
         fig = visualizer.visualize_data(processed_data, total_minutes)
-        return fig, None  # Returning fig and None as a tuple
+        return fig
     return None, None
 
 # Streamlit app
@@ -189,7 +193,7 @@ if st.session_state.show_loader:
       display: flex;
       justify-content: center;
       align-items: center;
-      background-color: rgba(0, 0, 0, 0.5); /* Dark background for dark mode */
+      background-color: rgba(0, 0, 0, 0.5);
       z-index: 9999;
       transition: opacity 1s ease-out;
     }
@@ -215,7 +219,7 @@ if st.session_state.show_loader:
         loader.style.opacity = '0';
         setTimeout(function() {
             loader.style.display = 'none';
-        }, 1000); // Match this time with the CSS fade-out duration
+        }, 1000);
     }
     function showLoader() {
         const loader = document.getElementById('loader');
@@ -226,12 +230,7 @@ if st.session_state.show_loader:
     </script>
     """
     loader_container.markdown(custom_loader, unsafe_allow_html=True)
-    fig, error_msg = asyncio.run(main())
-    if isinstance(fig, tuple):
-        fig, error_msg = fig
-    else:
-        error_msg = None
-
+    fig, error_msg = await main()
     if fig:
         st.plotly_chart(fig, use_container_width=True)
     else:
@@ -243,4 +242,9 @@ else:
     if visualizer.is_configured:
         if st.button("Generate Visualization"):
             st.session_state.show_loader = True
-            st.rerun()
+            st.experimental_rerun()
+    else:
+        if st.session_state.get("show_inputs", True):
+            st.session_state.show_inputs = True
+        else:
+            st.empty()  # Hide the input fields

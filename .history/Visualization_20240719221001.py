@@ -31,8 +31,8 @@ class NotionDataVisualizer:
         self.is_configured = self.token and self.database_id
 
         if not self.is_configured:
-            self.token = st.text_input("请输入Notion API Token:", key='token', placeholder='请输入有效的 API Token', help="确保 Token 长度符合要求")
-            self.database_id = st.text_input("请输入Notion数据库ID:", key='database_id', placeholder='请输入有效的数据库 ID', help="确保数据库 ID 长度符合要求")
+            self.token = st.text_input("请输入Notion API Token:", key='token', placeholder='请输入有效的 API Token')
+            self.database_id = st.text_input("请输入Notion数据库ID:", key='database_id', placeholder='请输入有效的数据库 ID')
             self.show_save_button()
 
     def save_config(self):
@@ -141,7 +141,7 @@ async def main():
     if raw_data:
         processed_data, total_minutes = await visualizer.process_data(raw_data)
         fig = visualizer.visualize_data(processed_data, total_minutes)
-        return fig, None  # Returning fig and None as a tuple
+        return fig
     return None, None
 
 # Streamlit app
@@ -150,10 +150,10 @@ st.title("Notion Data Visualization")
 # Custom CSS for input field color change
 custom_css = """
 <style>
-input#token:valid, input#database_id:valid {
+input:valid {
     border-color: #00FF00; /* Green color when valid */
 }
-input#token:invalid, input#database_id:invalid {
+input:invalid {
     border-color: #FF0000; /* Red color when invalid */
 }
 </style>
@@ -227,11 +227,6 @@ if st.session_state.show_loader:
     """
     loader_container.markdown(custom_loader, unsafe_allow_html=True)
     fig, error_msg = asyncio.run(main())
-    if isinstance(fig, tuple):
-        fig, error_msg = fig
-    else:
-        error_msg = None
-
     if fig:
         st.plotly_chart(fig, use_container_width=True)
     else:
@@ -243,4 +238,4 @@ else:
     if visualizer.is_configured:
         if st.button("Generate Visualization"):
             st.session_state.show_loader = True
-            st.rerun()
+            st.experimental_rerun()

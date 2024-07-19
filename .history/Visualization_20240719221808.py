@@ -13,12 +13,12 @@ PARENT_RELATION_PROPERTY = 'Parent Hab'
 
 # Function to validate Notion API Token
 def is_valid_token(token):
-    # Example validation, you might need to adjust based on real validation rules
+    # Example validation, adjust based on real validation rules
     return len(token) >= 20
 
 # Function to validate Notion Database ID
 def is_valid_database_id(database_id):
-    # Example validation, you might need to adjust based on real validation rules
+    # Example validation, adjust based on real validation rules
     return len(database_id) == 32
 
 class NotionDataVisualizer:
@@ -31,6 +31,42 @@ class NotionDataVisualizer:
         self.is_configured = self.token and self.database_id
 
         if not self.is_configured:
+            st.markdown("""
+            <style>
+            .valid-input {
+                border-color: #00FF00; /* Green color when valid */
+            }
+            .invalid-input {
+                border-color: #FF0000; /* Red color when invalid */
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
+            st.markdown("""
+            <script>
+            function updateInputStyle(inputId, isValid) {
+                const inputElement = document.getElementById(inputId);
+                if (isValid) {
+                    inputElement.classList.add('valid-input');
+                    inputElement.classList.remove('invalid-input');
+                } else {
+                    inputElement.classList.add('invalid-input');
+                    inputElement.classList.remove('valid-input');
+                }
+            }
+            function validateInputs() {
+                const token = document.getElementById('token').value;
+                const dbId = document.getElementById('database_id').value;
+                const isTokenValid = token.length >= 20;
+                const isDbIdValid = dbId.length === 32;
+                updateInputStyle('token', isTokenValid);
+                updateInputStyle('database_id', isDbIdValid);
+                document.getElementById('save_button').disabled = !(isTokenValid && isDbIdValid);
+            }
+            document.addEventListener('input', validateInputs);
+            </script>
+            """, unsafe_allow_html=True)
+
             self.token = st.text_input("请输入Notion API Token:", key='token', placeholder='请输入有效的 API Token', help="确保 Token 长度符合要求")
             self.database_id = st.text_input("请输入Notion数据库ID:", key='database_id', placeholder='请输入有效的数据库 ID', help="确保数据库 ID 长度符合要求")
             self.show_save_button()
@@ -45,7 +81,7 @@ class NotionDataVisualizer:
 
     def show_save_button(self):
         if is_valid_token(self.token) and is_valid_database_id(self.database_id):
-            if st.button("保存配置"):
+            if st.button("保存配置", key='save_button'):
                 self.save_config()
         else:
             st.warning("请确保输入的 Notion API Token 和数据库 ID 符合格式要求。")
@@ -141,26 +177,11 @@ async def main():
     if raw_data:
         processed_data, total_minutes = await visualizer.process_data(raw_data)
         fig = visualizer.visualize_data(processed_data, total_minutes)
-        return fig, None  # Returning fig and None as a tuple
+        return fig
     return None, None
 
 # Streamlit app
 st.title("Notion Data Visualization")
-
-# Custom CSS for input field color change
-custom_css = """
-<style>
-input#token:valid, input#database_id:valid {
-    border-color: #00FF00; /* Green color when valid */
-}
-input#token:invalid, input#database_id:invalid {
-    border-color: #FF0000; /* Red color when invalid */
-}
-</style>
-"""
-
-# Apply custom CSS
-st.markdown(custom_css, unsafe_allow_html=True)
 
 # Initialize session state
 if 'show_loader' not in st.session_state:
@@ -225,22 +246,21 @@ if st.session_state.show_loader:
     window.addEventListener('load', showLoader);
     </script>
     """
+    
+    # Show custom emoji loader while processing
     loader_container.markdown(custom_loader, unsafe_allow_html=True)
-    fig, error_msg = asyncio.run(main())
-    if isinstance(fig, tuple):
-        fig, error_msg = fig
-    else:
-        error_msg = None
-
+    fig, _ = await main()
+    
+    # Hide the loader and show the plot or error
     if fig:
         st.plotly_chart(fig, use_container_width=True)
+        loader_container.markdown("<script>document.getElementById('loader').style.opacity = '0'; setTimeout(function() { document.getElementById('loader').style.display = 'none'; }, 1000);</script>", unsafe_allow_html=True)
     else:
         st.error("数据处理失败，请检查 API 配置和数据。")
-    loader_container.markdown("<script>document.getElementById('loader').style.opacity = '0'; setTimeout(function() { document.getElementById('loader').style.display = 'none'; }, 1000);</script>", unsafe_allow_html=True)
-    st.session_state.show_loader = False
+        loader_container.empty()
 else:
     visualizer = NotionDataVisualizer()
     if visualizer.is_configured:
         if st.button("Generate Visualization"):
             st.session_state.show_loader = True
-            st.rerun()
+            st.experimental_rerun()

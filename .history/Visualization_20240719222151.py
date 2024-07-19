@@ -13,12 +13,10 @@ PARENT_RELATION_PROPERTY = 'Parent Hab'
 
 # Function to validate Notion API Token
 def is_valid_token(token):
-    # Example validation, you might need to adjust based on real validation rules
     return len(token) >= 20
 
 # Function to validate Notion Database ID
 def is_valid_database_id(database_id):
-    # Example validation, you might need to adjust based on real validation rules
     return len(database_id) == 32
 
 class NotionDataVisualizer:
@@ -30,29 +28,32 @@ class NotionDataVisualizer:
 
         self.is_configured = self.token and self.database_id
 
-        if not self.is_configured:
-            self.token = st.text_input("请输入Notion API Token:", key='token', placeholder='请输入有效的 API Token', help="确保 Token 长度符合要求")
-            self.database_id = st.text_input("请输入Notion数据库ID:", key='database_id', placeholder='请输入有效的数据库 ID', help="确保数据库 ID 长度符合要求")
-            self.show_save_button()
+        # Create placeholders for inputs
+        self.token_input = st.text_input("请输入Notion API Token:", value=self.token, key='token')
+        self.database_id_input = st.text_input("请输入Notion数据库ID:", value=self.database_id, key='database_id')
+        self.token_valid = is_valid_token(self.token_input)
+        self.database_id_valid = is_valid_database_id(self.database_id_input)
+        
+        self.show_save_button()
 
     def save_config(self):
-        if self.token and self.database_id:
+        if self.token_valid and self.database_id_valid:
             with open('.env', 'w') as f:
-                f.write(f"NOTION_API_KEY={self.token}\n")
-                f.write(f"NOTION_HABITS_DATABASE_ID={self.database_id}\n")
+                f.write(f"NOTION_API_KEY={self.token_input}\n")
+                f.write(f"NOTION_HABITS_DATABASE_ID={self.database_id_input}\n")
             st.success("配置已保存到 .env 文件中")
             self.is_configured = True
 
     def show_save_button(self):
-        if is_valid_token(self.token) and is_valid_database_id(self.database_id):
+        if self.token_valid and self.database_id_valid:
             if st.button("保存配置"):
                 self.save_config()
         else:
             st.warning("请确保输入的 Notion API Token 和数据库 ID 符合格式要求。")
-
+        
     async def fetch(self, session, url, method='GET', **kwargs):
         headers = {
-            "Authorization": f"Bearer {self.token}",
+            "Authorization": f"Bearer {self.token_input}",
             "Notion-Version": "2022-06-28"
         }
         try:
@@ -69,7 +70,7 @@ class NotionDataVisualizer:
             return None
 
     async def get_notion_data(self):
-        url = f"https://api.notion.com/v1/databases/{self.database_id}/query"
+        url = f"https://api.notion.com/v1/databases/{self.database_id_input}/query"
         async with aiohttp.ClientSession() as session:
             response = await self.fetch(session, url, method='POST', json={})
         return response
@@ -141,21 +142,21 @@ async def main():
     if raw_data:
         processed_data, total_minutes = await visualizer.process_data(raw_data)
         fig = visualizer.visualize_data(processed_data, total_minutes)
-        return fig, None  # Returning fig and None as a tuple
+        return fig
     return None, None
 
 # Streamlit app
 st.title("Notion Data Visualization")
 
 # Custom CSS for input field color change
-custom_css = """
+custom_css = f"""
 <style>
-input#token:valid, input#database_id:valid {
-    border-color: #00FF00; /* Green color when valid */
-}
-input#token:invalid, input#database_id:invalid {
-    border-color: #FF0000; /* Red color when invalid */
-}
+input#{'token'} {{
+    border-color: {'#00FF00' if is_valid_token(st.session_state.token) else '#FF0000'}; /* Green if valid, red if invalid */
+}}
+input#{'database_id'} {{
+    border-color: {'#00FF00' if is_valid_database_id(st.session_state.database_id) else '#FF0000'}; /* Green if valid, red if invalid */
+}}
 </style>
 """
 
@@ -226,12 +227,7 @@ if st.session_state.show_loader:
     </script>
     """
     loader_container.markdown(custom_loader, unsafe_allow_html=True)
-    fig, error_msg = asyncio.run(main())
-    if isinstance(fig, tuple):
-        fig, error_msg = fig
-    else:
-        error_msg = None
-
+    fig, error_msg = await asyncio.run(main())
     if fig:
         st.plotly_chart(fig, use_container_width=True)
     else:
@@ -243,4 +239,4 @@ else:
     if visualizer.is_configured:
         if st.button("Generate Visualization"):
             st.session_state.show_loader = True
-            st.rerun()
+            st.experimental_rerun()

@@ -141,7 +141,7 @@ async def main():
     if raw_data:
         processed_data, total_minutes = await visualizer.process_data(raw_data)
         fig = visualizer.visualize_data(processed_data, total_minutes)
-        return fig, None  # Returning fig and None as a tuple
+        return fig
     return None, None
 
 # Streamlit app
@@ -227,11 +227,6 @@ if st.session_state.show_loader:
     """
     loader_container.markdown(custom_loader, unsafe_allow_html=True)
     fig, error_msg = asyncio.run(main())
-    if isinstance(fig, tuple):
-        fig, error_msg = fig
-    else:
-        error_msg = None
-
     if fig:
         st.plotly_chart(fig, use_container_width=True)
     else:
@@ -243,4 +238,4 @@ else:
     if visualizer.is_configured:
         if st.button("Generate Visualization"):
             st.session_state.show_loader = True
-            st.rerun()
+            st.st.rerun()
