@@ -240,7 +240,7 @@ else:
             </script>
             """
             loader_container.markdown(custom_loader, unsafe_allow_html=True)
-            fig, error_msg = main()
+            fig, error_msg = await main()
 
             if fig:
                 st.plotly_chart(fig, use_container_width=True)

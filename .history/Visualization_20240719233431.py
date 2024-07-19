@@ -165,8 +165,6 @@ st.markdown(custom_css, unsafe_allow_html=True)
 # Initialize session state
 if 'config_saved' not in st.session_state:
     st.session_state.config_saved = False
-if 'show_loader' not in st.session_state:
-    st.session_state.show_loader = False
 
 if st.session_state.config_saved:
     st.success("配置已保存到 .env 文件中")
