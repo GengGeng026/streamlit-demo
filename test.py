@@ -1,25 +1,43 @@
+import pandas as pd
 import streamlit as st
-import time
+from streamlit_vizzu import Config, Data, VizzuChart
 
-# Function to display a message with a fade-out effect
-def show_fadeout_message(message, duration=5):
-    st.markdown(f"""
-    <div id="fadeout-message" style="opacity: 1; transition: opacity 2s;">
-        {message}
-    </div>
-    <script>
-    setTimeout(function() {{
-        var element = document.getElementById('fadeout-message');
-        element.style.opacity = '0';
-    }}, {duration * 1000});  // duration in milliseconds
-    </script>
-    """, unsafe_allow_html=True)
+# Create a VizzuChart object with the default height and width
+chart = VizzuChart()
 
-# Example usage in a Streamlit app
-st.title("Streamlit Fade-Out Example")
+# Generate some data and add it to the chart
+df = pd.DataFrame({"cat": ["x", "y", "z"], "val": [1, 2, 3]})
+data = Data()
+data.add_df(df)
+chart.animate(data)
 
-# Display a message that will fade out after 5 seconds
-show_fadeout_message("配置已保存到 .env 文件中", duration=5)
+st.subheader(
+    "Visit [intro-to-vizzu-in.streamlit.app](https://intro-to-vizzu-in.streamlit.app/) "
+    "to follow along"
+)
 
-# Additional Streamlit code
-st.write("其他内容在这里...")
+# Add some configuration to tell Vizzu how to display the data
+chart.animate(Config({"x": "cat", "y": "val", "title": "Look at my plot!"}))
+
+if st.checkbox("Swap"):
+    chart.animate(Config({"x": "val", "y": "cat", "title": "Swapped!"}))
+
+# Show the chart in the app!
+output = chart.show()
+
+if (
+    output is not None
+    and "target" in output
+    and "tagName" in output["target"]
+    and output["target"]["tagName"] == "plot-marker"
+):
+    st.write("value of clicked bar:", output["target"]["values"]["val"])
+
+st.caption("Data shown on the chart")
+st.dataframe(df)
+
+st.write(
+    "Check the [source code](https://github.com/vizzu-streamlit/streamlit-vizzu) "
+    "of the bidirectional component that makes this possible, created by "
+    "[blackary](https://github.com/blackary)"
+)

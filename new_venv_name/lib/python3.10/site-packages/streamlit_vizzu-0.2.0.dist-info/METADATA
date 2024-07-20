@@ -1,0 +1,37 @@
+Metadata-Version: 2.1
+Name: streamlit-vizzu
+Version: 0.2.0
+Summary: Bidirectional streamlit component for interacting with vizzu animations
+Author: Zachary Blackwoood
+Author-email: zachary@streamlit.io
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: streamlit >=1.13.0
+Requires-Dist: ipyvizzu >=0.17.0
+
+# streamlit-vizzu
+
+Bidirectional streamlit component for interacting with [vizzu](https://vizzuhq.com/)
+animations. This package builds on the excellent
+[ipyvizzu](https://github.com/vizzuhq/ipyvizzu) library and adds some streamlit-specific
+code to allow you to interact with an ipyvizzu chart within a streamlit app without
+the chart being redrawn on every interaction.
+
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://intro-to-vizzu-in.streamlit.app/)
+
+## Installation instructions
+
+```sh
+pip install streamlit-vizzu
+```
+
+## Documentation
+
+### [How to Get Started](docs/TUTORIAL.md)
+
+### [How To Guides](docs/HOW_TO.md)
+
+### [Streamlit-Vizzu API](docs/REFERENCE.md)
+
+### [More about Streamlit-Vizzu(Under construction)](docs/EXPLANATION.md)

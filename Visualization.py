@@ -1,9 +1,10 @@
-import streamlit as st
+import os
 import asyncio
 import aiohttp
-import plotly.graph_objects as go
+import pandas as pd
+import streamlit as st
 from dotenv import load_dotenv
-import os
+from streamlit_vizzu import Config, Data, VizzuChart
 
 # Constants
 TASK_NOTION_NAME = 'Name'
@@ -120,31 +121,35 @@ class NotionDataVisualizer:
         values = [data[name] for name in names]
         proportions = [value / total_minutes * 100 for value in values]
         
-        fig = go.Figure(data=[go.Pie(
-            labels=names,
-            values=proportions,
-            textinfo='percent',
-            insidetextorientation='radial'
-        )])
-        fig.update_layout(
-            title_text="主習慣大類占比",
-            template='plotly',
-            showlegend=True,
-            legend=dict(
-                orientation="v",
-                xanchor="left",
-                x=1.05,
-                y=1
-            )
-        )
-        return fig
+        df = pd.DataFrame({
+            'Parent Category': names,
+            'Proportion': proportions
+        })
+
+        chart = VizzuChart()
+        data_vizzu = Data()
+        data_vizzu.add_df(df)
+        chart.animate(data_vizzu)
+        
+        config = Config({
+            "channels": {
+                "color": {"set": ["Parent Category"]},
+                "size": {"set": ["Proportion"]}
+            },
+            "title": "主习惯大类占比",
+            "geometry": "circle"
+        })
+        
+        chart.animate(config)
+
+        return chart
 
     async def generate_visualization(self):
         raw_data = await self.get_notion_data()
         if raw_data:
             processed_data, total_minutes = await self.process_data(raw_data)
-            fig = self.visualize_data(processed_data, total_minutes)
-            return fig
+            chart = self.visualize_data(processed_data, total_minutes)
+            return chart
         return None
 
 # Streamlit app
@@ -185,36 +190,19 @@ if not st.session_state.show_loader and visualizer.is_configured:
         st.session_state.show_loader = True
         st.rerun()
 
-# Function to display Lottie animation using JSON file
-def display_lottie_animation(json_url: str):
-    lottie_html = f"""
-    <div id="lottie-canvas" style="width: 300px; height: 300px; margin: auto;"></div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.5/lottie.min.js"></script>
-    <script>
-        document.addEventListener("DOMContentLoaded", function() {{
-            var animation = bodymovin.loadAnimation({{
-                container: document.getElementById('lottie-canvas'),
-                renderer: 'svg',
-                loop: true,
-                autoplay: true,
-                path: '{json_url}'
-            }});
-        }});
-    </script>
-    """
-    st.components.v1.html(lottie_html, height=300)
-
-# Load the Lottie animation
-lottie_animation_url = "https://assets10.lottiefiles.com/packages/lf20_kq5rGs.json"  # 替换为你希望使用的 Lottie 动画的 JSON URL
-
 # Handle loader logic and visualization generation
 if st.session_state.show_loader:
-    display_lottie_animation(lottie_animation_url)
-    fig = asyncio.run(visualizer.generate_visualization())
-    if fig:
-        st.session_state.visualization_fig = fig
-    st.session_state.show_loader = False
-    st.experimental_rerun()
+    with st.spinner("正在生成可视化..."):
+        chart = asyncio.run(visualizer.generate_visualization())
+    
+    if chart:
+        st.session_state.visualization_fig = chart
+    else:
+        st.error("数据处理失败，请检查 API 配置和数据。")
+    
+    st.session_state.show_loader = False  # Hide loader
+    st.rerun()  # Rerun to show the button again
 
+# Display the generated visualization if available
 if st.session_state.visualization_fig:
-    st.plotly_chart(st.session_state.visualization_fig)
+    st.session_state.visualization_fig.show()
