@@ -1,9 +1,9 @@
-import os
+import streamlit as st
 import asyncio
 import aiohttp
 import plotly.graph_objects as go
-import streamlit as st
 from dotenv import load_dotenv
+import os
 
 # Constants
 TASK_NOTION_NAME = 'Name'
@@ -33,7 +33,11 @@ class NotionDataVisualizer:
             self.database_id = st.text_input("请输入Notion数据库ID:", key='database_id', placeholder='请输入有效的数据库 ID', help="确保数据库 ID 长度符合要求")
             self.show_save_button()
         else:
-            st.success("配置已加载")
+            if 'configuration_loaded' not in st.session_state:
+                st.session_state.configuration_loaded = False
+
+            if not st.session_state.configuration_loaded:
+                st.session_state.configuration_loaded = True
 
     def save_config(self):
         if self.token and self.database_id:
@@ -42,6 +46,8 @@ class NotionDataVisualizer:
                 f.write(f"NOTION_HABITS_DATABASE_ID={self.database_id}\n")
             st.success("配置已保存到 .env 文件中")
             self.is_configured = True
+            st.session_state.configuration_loaded = False  # Reset the flag to show the success message again
+            st.session_state.show_config_message = True
             st.rerun()
 
     def show_save_button(self):
@@ -121,7 +127,7 @@ class NotionDataVisualizer:
             insidetextorientation='radial'
         )])
         fig.update_layout(
-            title_text="Notion Habits Visualization",
+            title_text="主習慣大類占比",
             template='plotly',
             showlegend=True,
             legend=dict(
@@ -163,20 +169,52 @@ visualizer = NotionDataVisualizer()
 # Initialize session state
 if 'show_loader' not in st.session_state:
     st.session_state.show_loader = False
+if 'visualization_fig' not in st.session_state:
+    st.session_state.visualization_fig = None
+if 'show_config_message' not in st.session_state:
+    st.session_state.show_config_message = False
 
-if visualizer.is_configured:
+# Show "配置已加载" message if needed
+if st.session_state.show_config_message and visualizer.is_configured:
+    st.success("配置已加载")
+    st.session_state.show_config_message = False
+
+# Show "Generate Visualization" button only if not loading
+if not st.session_state.show_loader and visualizer.is_configured:
     if st.button("Generate Visualization"):
         st.session_state.show_loader = True
         st.rerun()
 
+# Function to display Lottie animation using JSON file
+def display_lottie_animation(json_url: str):
+    lottie_html = f"""
+    <div id="lottie-canvas" style="width: 300px; height: 300px; margin: auto;"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.5/lottie.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {{
+            var animation = bodymovin.loadAnimation({{
+                container: document.getElementById('lottie-canvas'),
+                renderer: 'svg',
+                loop: true,
+                autoplay: true,
+                path: '{json_url}'
+            }});
+        }});
+    </script>
+    """
+    st.components.v1.html(lottie_html, height=300)
+
+# Load the Lottie animation
+lottie_animation_url = "https://assets10.lottiefiles.com/packages/lf20_kq5rGs.json"  # 替换为你希望使用的 Lottie 动画的 JSON URL
+
 # Handle loader logic and visualization generation
 if st.session_state.show_loader:
-    with st.spinner("正在生成可视化..."):
-        fig = asyncio.run(visualizer.generate_visualization())
-    
+    display_lottie_animation(lottie_animation_url)
+    fig = asyncio.run(visualizer.generate_visualization())
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.error("数据处理失败，请检查 API 配置和数据。")
-    
+        st.session_state.visualization_fig = fig
     st.session_state.show_loader = False
+    st.experimental_rerun()
+
+if st.session_state.visualization_fig:
+    st.plotly_chart(st.session_state.visualization_fig)
