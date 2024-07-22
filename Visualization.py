@@ -91,7 +91,6 @@ class NotionDataVisualizer:
 
     async def process_data(self, data):
         categories = {}
-        total_minutes = 0
         async with aiohttp.ClientSession() as session:
             tasks = []
             for result in data['results']:
@@ -106,24 +105,22 @@ class NotionDataVisualizer:
                         categories['No Parent'] = 0
                     categories['No Parent'] += total_mins
 
-                total_minutes += total_mins
-
             parent_names = await asyncio.gather(*tasks)
-            for parent_name in parent_names:
+            for i, parent_name in enumerate(parent_names):
                 if parent_name not in categories:
                     categories[parent_name] = 0
-                categories[parent_name] += total_mins
+                categories[parent_name] += data['results'][i]['properties'][TOTAL_ELAPSED_TIME_NOTION_NAME]['rollup']['number']
 
-        return categories, total_minutes
+        return categories
 
-    def visualize_data(self, data, total_minutes):
+    @st.cache_data
+    def visualize_data(_self, data):
         names = list(data.keys())
         values = [data[name] for name in names]
-        proportions = [value / total_minutes * 100 for value in values]
-        
+
         df = pd.DataFrame({
             'Parent Category': names,
-            'Proportion': proportions
+            'Total mins rollup': values
         })
 
         chart = VizzuChart()
@@ -134,7 +131,7 @@ class NotionDataVisualizer:
         config = Config({
             "channels": {
                 "color": {"set": ["Parent Category"]},
-                "size": {"set": ["Proportion"]}
+                "size": {"set": ["Total mins rollup"]}
             },
             "title": "主习惯大类占比",
             "geometry": "circle"
@@ -142,15 +139,38 @@ class NotionDataVisualizer:
         
         chart.animate(config)
 
-        return chart
+        return chart, df
 
     async def generate_visualization(self):
-        raw_data = await self.get_notion_data()
-        if raw_data:
-            processed_data, total_minutes = await self.process_data(raw_data)
-            chart = self.visualize_data(processed_data, total_minutes)
-            return chart
-        return None
+        csv_dir = 'data'
+        csv_file_path = os.path.join(csv_dir, 'habits.csv')
+       
+        # Ensure the directory exists
+        if not os.path.exists(csv_dir):
+            os.makedirs(csv_dir)
+        
+        if os.path.exists(csv_file_path):
+            # 如果 CSV 文件存在，则读取它
+            df = pd.read_csv(csv_file_path)
+            processed_data = df.set_index('Parent Category')['Total mins rollup'].to_dict()
+            # 使用缓存数据进行可视化
+            chart, df_viz = self.visualize_data(processed_data)
+            return chart, df_viz
+        else:
+            # 否则，从 Notion 获取数据
+            raw_data = await self.get_notion_data()
+            if raw_data:
+                processed_data = await self.process_data(raw_data)
+                # 保存处理后的数据到 CSV 文件
+                df = pd.DataFrame({
+                    'Parent Category': list(processed_data.keys()),
+                    'Total mins rollup': list(processed_data.values())
+                })
+                df.to_csv(csv_file_path, index=False)
+                # 使用缓存数据进行可视化
+                chart, df_viz = self.visualize_data(processed_data)
+                return chart, df_viz
+            return None, None
 
 # Streamlit app
 st.title("Notion Data Visualization")
@@ -176,6 +196,8 @@ if 'show_loader' not in st.session_state:
     st.session_state.show_loader = False
 if 'visualization_fig' not in st.session_state:
     st.session_state.visualization_fig = None
+if 'data_table' not in st.session_state:
+    st.session_state.data_table = None
 if 'show_config_message' not in st.session_state:
     st.session_state.show_config_message = False
 
@@ -193,16 +215,22 @@ if not st.session_state.show_loader and visualizer.is_configured:
 # Handle loader logic and visualization generation
 if st.session_state.show_loader:
     with st.spinner("正在生成可视化..."):
-        chart = asyncio.run(visualizer.generate_visualization())
+        chart, df = asyncio.run(visualizer.generate_visualization())
     
     if chart:
         st.session_state.visualization_fig = chart
+        st.session_state.data_table = df
     else:
         st.error("数据处理失败，请检查 API 配置和数据。")
     
-    st.session_state.show_loader = False  # Hide loader
-    st.rerun()  # Rerun to show the button again
+    st.session_state.show_loader = False
+    st.rerun()  # Ensure the visualization is shown properly
 
 # Display the generated visualization if available
 if st.session_state.visualization_fig:
     st.session_state.visualization_fig.show()
+
+# Display the data table if available
+if st.session_state.data_table is not None:
+    st.caption("Data shown on the chart")
+    st.dataframe(st.session_state.data_table)

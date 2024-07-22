@@ -1,43 +1,21 @@
-import pandas as pd
 import streamlit as st
-from streamlit_vizzu import Config, Data, VizzuChart
+from streamlit_notion import NotionConnection
+from dotenv import load_dotenv
+import os
 
-# Create a VizzuChart object with the default height and width
-chart = VizzuChart()
+load_dotenv() 
+# 从环境变量中获取 API 密钥
+notion_api_key = os.getenv("NOTION_API_KEY")
 
-# Generate some data and add it to the chart
-df = pd.DataFrame({"cat": ["x", "y", "z"], "val": [1, 2, 3]})
-data = Data()
-data.add_df(df)
-chart.animate(data)
+# 确保密钥被正确加载
+if not notion_api_key:
+    st.error("NOTION_API_KEY 未设置")
+else:
+    # 使用正确的参数初始化连接
+    conn = NotionConnection(connection_name="notion", api_key=notion_api_key)
 
-st.subheader(
-    "Visit [intro-to-vizzu-in.streamlit.app](https://intro-to-vizzu-in.streamlit.app/) "
-    "to follow along"
-)
+    databases = conn.list_databases()
 
-# Add some configuration to tell Vizzu how to display the data
-chart.animate(Config({"x": "cat", "y": "val", "title": "Look at my plot!"}))
-
-if st.checkbox("Swap"):
-    chart.animate(Config({"x": "val", "y": "cat", "title": "Swapped!"}))
-
-# Show the chart in the app!
-output = chart.show()
-
-if (
-    output is not None
-    and "target" in output
-    and "tagName" in output["target"]
-    and output["target"]["tagName"] == "plot-marker"
-):
-    st.write("value of clicked bar:", output["target"]["values"]["val"])
-
-st.caption("Data shown on the chart")
-st.dataframe(df)
-
-st.write(
-    "Check the [source code](https://github.com/vizzu-streamlit/streamlit-vizzu) "
-    "of the bidirectional component that makes this possible, created by "
-    "[blackary](https://github.com/blackary)"
-)
+    for database in databases["results"]:
+        r = conn.query(database["id"], page_size=1)
+        st.write(r)
