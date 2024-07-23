@@ -5,12 +5,22 @@ import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 from streamlit_vizzu import Config, Data, VizzuChart
+import random
+import logging
+from typing import List, Dict, Tuple
 
 # Constants
 TASK_NOTION_NAME = 'Name'
-TOTAL_ELAPSED_TIME_NOTION_NAME = 'Total mins rollup'
+TOTAL_ELAPSED_TIME_FOR_SUB_HABIT = 'Total mins rollup'
+TOTAL_MINUTES_FOR_PARENT_HABIT = 'Total min Par'
 RANK_API_NOTION_NAME = 'rankAPI'
 PARENT_RELATION_PROPERTY = 'Parent Hab'
+MAX_RETRIES = 30
+INITIAL_RETRY_DELAY = 5
+MAX_RETRY_DELAY = 300
+FETCH_TIMEOUT = 900
+
+logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 # Function to validate Notion API Token
 def is_valid_token(token):
@@ -19,6 +29,46 @@ def is_valid_token(token):
 # Function to validate Notion Database ID
 def is_valid_database_id(database_id):
     return len(database_id) == 32
+
+
+async def check_network():
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://api.notion.com", timeout=10) as response:
+                if response.status == 200:
+                    logging.info("Network check passed. Notion API is reachable.")
+                else:
+                    logging.warning(f"Network check failed. Status: {response.status}")
+    except Exception as e:
+        logging.error(f"Network check failed. Error: {e}")
+
+async def exponential_backoff(attempt):
+    delay = min(MAX_RETRY_DELAY, INITIAL_RETRY_DELAY * (2 ** attempt))
+    jitter = random.uniform(0, 0.1 * delay)
+    total_delay = delay + jitter
+    logging.info(f"Backing off for {total_delay:.2f} seconds")
+    await asyncio.sleep(total_delay)
+
+async def smart_retry(func, *args, **kwargs):
+    for attempt in range(MAX_RETRIES):
+        try:
+            return await func(*args, **kwargs)
+        except aiohttp.ClientResponseError as e:
+            if e.status in {504, 502}:
+                logging.warning(f"Server error {e.status}. Attempt {attempt + 1}/{MAX_RETRIES}")
+            elif e.status == 429:
+                logging.warning(f"Rate limit exceeded. Attempt {attempt + 1}/{MAX_RETRIES}")
+            else:
+                logging.error(f"Client response error: {e.status}. Attempt {attempt + 1}/{MAX_RETRIES}")
+            await exponential_backoff(attempt)
+        except asyncio.TimeoutError:
+            logging.error(f"Timeout error. Attempt {attempt + 1}/{MAX_RETRIES}")
+            await exponential_backoff(attempt)
+        except Exception as e:
+            logging.error(f"Unexpected error: {e}. Attempt {attempt + 1}/{MAX_RETRIES}")
+            await exponential_backoff(attempt)
+    raise Exception(f"Failed after {MAX_RETRIES} retries")
+
 
 class NotionDataVisualizer:
     def __init__(self):
@@ -58,13 +108,25 @@ class NotionDataVisualizer:
         else:
             st.warning("请确保输入的 Notion API Token 和数据库 ID 符合格式要求。")
 
-    async def fetch(self, session, url, method='GET', **kwargs):
-        headers = {
+
+    async def fetch(self, session, url, method='GET', query_params=None, headers=None, **kwargs):
+        headers = headers or {
             "Authorization": f"Bearer {self.token}",
             "Notion-Version": "2022-06-28"
         }
+        
+        if "databases" in url:
+            headers["Content-Type"] = "application/json"
+            
         try:
-            async with session.request(method, url, headers=headers, **kwargs) as response:
+            async with session.request(method, url, headers=headers, json=query_params, **kwargs) as response:
+                response.raise_for_status()
+                
+                rate_limit_info = {
+                    'remaining': int(response.headers.get('Rate-Limit-Remaining', '0')),
+                    'limit': int(response.headers.get('Rate-Limit-Limit', '0')),
+                }
+                
                 if response.content_type == 'application/json':
                     return await response.json()
                 else:
@@ -73,29 +135,63 @@ class NotionDataVisualizer:
                     st.error(f"Response content: {content}")
                     return None
         except Exception as e:
-            st.error(f"请求失败: {e}")
+            st.error(f"Request failed: {e}")
             return None
-
+                            
     async def get_notion_data(self):
         url = f"https://api.notion.com/v1/databases/{self.database_id}/query"
         async with aiohttp.ClientSession() as session:
-            response = await self.fetch(session, url, method='POST', json={})
-        return response
+            has_more = True
+            start_cursor = None
+            results = []
+            page_count = 0
+
+            while has_more:
+                query_params = {"page_size": 25}  # Adjust the page size if needed
+                if start_cursor:
+                    query_params['start_cursor'] = start_cursor
+
+                try:
+                    response = await smart_retry(self.fetch, session, url, method='POST', query_params=query_params)
+                    
+                    if response:
+                        fetched_results = response.get('results', [])
+                        page_count += len(fetched_results)
+                        results.extend(fetched_results)
+                        has_more = response.get('has_more', False)
+                        start_cursor = response.get('next_cursor', None)
+
+                        logging.info(f"Retrieved {page_count} items so far.")
+                        if start_cursor:
+                            logging.info(f"Next start_cursor: {start_cursor}")
+                        else:
+                            logging.info("No more pages to retrieve.")
+                        await asyncio.sleep(1)  # Add a short delay between requests
+                    else:
+                        has_more = False
+
+                except Exception as e:
+                    logging.error(f"Unexpected error during pagination: {e}")
+                    break
+
+        logging.info(f"Total items retrieved: {page_count}")
+        return {'results': results}
 
     async def get_page_name(self, session, page_id):
         url = f"https://api.notion.com/v1/pages/{page_id}"
         page_data = await self.fetch(session, url)
-        if page_data and 'properties' in page_data and TASK_NOTION_NAME in page_data['properties']:
+        if page_data and 'properties' in page_data and TASK_NOTION_NAME in page_data['properties'] and '*' in page_data['properties'][TASK_NOTION_NAME]['title'][0]['plain_text']:
             return page_data['properties'][TASK_NOTION_NAME]['title'][0]['plain_text']
-        return "Unknown"
-
+        else:
+            return "Unknown"
+        
     async def process_data(self, data):
         categories = {}
         async with aiohttp.ClientSession() as session:
             tasks = []
             for result in data['results']:
                 parent = result['properties'].get(PARENT_RELATION_PROPERTY, {})
-                total_mins = result['properties'].get(TOTAL_ELAPSED_TIME_NOTION_NAME, {}).get('rollup', {}).get('number', 0)
+                total_mins = result['properties'].get(TOTAL_MINUTES_FOR_PARENT_HABIT, {}).get('formula', {}).get('number', 0)
 
                 if 'relation' in parent and parent['relation']:
                     parent_id = parent['relation'][0]['id']
@@ -109,9 +205,10 @@ class NotionDataVisualizer:
             for i, parent_name in enumerate(parent_names):
                 if parent_name not in categories:
                     categories[parent_name] = 0
-                categories[parent_name] += data['results'][i]['properties'][TOTAL_ELAPSED_TIME_NOTION_NAME]['rollup']['number']
+                categories[parent_name] += data['results'][i]['properties'][TOTAL_MINUTES_FOR_PARENT_HABIT]['formula']['number']
 
         return categories
+
 
     @st.cache_data
     def visualize_data(_self, data):
@@ -120,7 +217,7 @@ class NotionDataVisualizer:
 
         df = pd.DataFrame({
             'Parent Category': names,
-            'Total mins rollup': values
+            'Total Minutes': values
         })
 
         chart = VizzuChart()
@@ -131,7 +228,7 @@ class NotionDataVisualizer:
         config = Config({
             "channels": {
                 "color": {"set": ["Parent Category"]},
-                "size": {"set": ["Total mins rollup"]}
+                "size": {"set": ["Total Minutes"]}
             },
             "title": "主习惯大类占比",
             "geometry": "circle"
@@ -152,7 +249,7 @@ class NotionDataVisualizer:
         if os.path.exists(csv_file_path):
             # 如果 CSV 文件存在，则读取它
             df = pd.read_csv(csv_file_path)
-            processed_data = df.set_index('Parent Category')['Total mins rollup'].to_dict()
+            processed_data = df.set_index('Parent Category')['Total Minutes'].to_dict()
             # 使用缓存数据进行可视化
             chart, df_viz = self.visualize_data(processed_data)
             return chart, df_viz
@@ -164,7 +261,7 @@ class NotionDataVisualizer:
                 # 保存处理后的数据到 CSV 文件
                 df = pd.DataFrame({
                     'Parent Category': list(processed_data.keys()),
-                    'Total mins rollup': list(processed_data.values())
+                    'Total Minutes': list(processed_data.values())
                 })
                 df.to_csv(csv_file_path, index=False)
                 # 使用缓存数据进行可视化
