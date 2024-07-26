@@ -9,6 +9,8 @@ from streamlit_vizzu import Config, Data, VizzuChart
 import random
 import logging
 from typing import List, Dict, Tuple
+import plotly.express as px
+import plotly.graph_objects as go
 
 # Constants
 TASK_NOTION_NAME = 'Name'
@@ -116,16 +118,6 @@ def clear_progress_and_regenerate():
 
     st.rerun()
 
-def create_chart(df):
-    chart = VizzuChart(height=360, width=480)
-    data = Data()
-    data.add_df(df)
-
-    chart.animate(data)
-    config = Config({"x": "Total Minutes", "y": "Category", "label": "Total Minutes", "title": "Category vs Total Minutes"})
-    chart.animate(config)
-
-    return chart
 
 class NotionDataVisualizer:
     def __init__(self):
@@ -304,6 +296,20 @@ class NotionDataVisualizer:
         df = pd.DataFrame(sorted_categories, columns=["Category", "Total Minutes"])
         return df
 
+    def create_chart(self, df, chart_type='bar', orientation='horizontal', height=500, width=700):
+        if chart_type == 'bar':
+            if orientation == 'horizontal':
+                fig = px.bar(df, x='Total Minutes', y='Category', orientation='h', height=height, width=width)
+            else:
+                fig = px.bar(df, x='Category', y='Total Minutes', height=height, width=width)
+        elif chart_type == 'scatter':
+            fig = px.scatter(df, x='Total Minutes', y='Category', size='Total Minutes', height=height, width=width)
+        elif chart_type == 'treemap':
+            fig = px.treemap(df, path=['Category'], values='Total Minutes', height=height, width=width)
+        
+        fig.update_layout(title='Category vs Total Minutes')
+        return fig
+
     async def generate_visualization(self):
         start_cursor = None
         total_retrieved = 0
@@ -349,10 +355,8 @@ class NotionDataVisualizer:
         df.to_csv('habits.csv', index=False)
         logging.info("Generated habits.csv file")
 
-        chart = create_chart(df)
-
-        return chart, df
-
+        return df
+    
 # Streamlit app
 st.title("Notion Data Visualization")
 
@@ -399,13 +403,23 @@ else:
             st.session_state.show_loader = True
             st.rerun()
 
-# Handle loader logic and visualization generation
+
+# Add chart type selector
+chart_types = ['bar', 'scatter', 'treemap']
+selected_chart_type = st.selectbox("Select Chart Type", chart_types)
+
+# 添加方向選擇器（僅適用於條形圖）
+if selected_chart_type == 'bar':
+    orientation = st.radio("Select Orientation", ['horizontal', 'vertical'])
+else:
+    orientation = 'horizontal'  # 默認值，不會用於非條形圖
+
+# 處理加載邏輯和可視化生成
 if st.session_state.show_loader:
     with st.spinner("正在獲取頁面 ..."):
         try:
-            chart, df = asyncio.run(visualizer.generate_visualization())
-            if chart:
-                st.session_state.visualization_fig = chart
+            df = asyncio.run(visualizer.generate_visualization())
+            if df is not None:
                 st.session_state.data_table = df
                 st.session_state.csv_checked = True
             else:
@@ -416,52 +430,37 @@ if st.session_state.show_loader:
     st.session_state.show_loader = False
     st.rerun()
 
-# Check for habits.csv and generate chart if it exists
+# 檢查 habits.csv 是否存在並生成圖表
 if 'csv_checked' not in st.session_state:
-    st.session_state.csv_checked = check_csv_and_generate_chart()
+    st.session_state.csv_checked = os.path.exists('habits.csv')
 
-# Display the generated visualization if available
-if st.session_state.visualization_fig:
-    # Add checkbox for swapping between horizontal and vertical charts
-    is_vertical = st.checkbox("Swap to Vertical Chart", value=st.session_state.is_vertical)
-    
-    if is_vertical != st.session_state.is_vertical:
-        st.session_state.is_vertical = is_vertical
-        
-        # Create a new chart with the updated orientation
+# 如果數據可用，顯示生成的可視化
+if st.session_state.data_table is not None or (st.session_state.csv_checked and os.path.exists('habits.csv')):
+    if st.session_state.data_table is None:
+        df = pd.read_csv('habits.csv')
+    else:
         df = st.session_state.data_table
-        chart = VizzuChart(height=360, width=480)
-        data = Data()
-        data.add_df(df)
-        chart.animate(data)
-        
-        if is_vertical:
-            config = Config({
-                "x": "Category", 
-                "y": "Total Minutes", 
-                "label": "Total Minutes",
-                "title": "Category vs Total Minutes (Vertical)"
-            })
-        else:
-            config = Config({
-                "x": "Total Minutes", 
-                "y": "Category", 
-                "label": "Total Minutes",
-                "title": "Category vs Total Minutes (Horizontal)"
-            })
-        
-        chart.animate(config)
-        st.session_state.visualization_fig = chart
+    
+    # 添加滑塊來選擇顯示的項目數量
+    num_items = st.slider("Number of items to display", min_value=5, max_value=len(df), value=min(20, len(df)))
+    
+    # 按 Total Minutes 排序數據框並選擇前 n 項
+    df_display = df.sort_values('Total Minutes', ascending=False).head(num_items)
+    
+    # 添加圖表尺寸的滑塊
+    col1, col2 = st.columns(2)
+    with col1:
+        chart_width = st.slider("Chart Width", min_value=400, max_value=1200, value=700)
+    with col2:
+        chart_height = st.slider("Chart Height", min_value=300, max_value=1000, value=500)
+    
+    # 創建基於選定類型、方向和尺寸的圖表
+    fig = visualizer.create_chart(df_display, chart_type=selected_chart_type, orientation=orientation, height=chart_height, width=chart_width)
+    
+    # 顯示圖表
+    st.plotly_chart(fig)
 
-    # Display the chart
-    output = st.session_state.visualization_fig.show()
-
-    # Handle click events on the chart
-    if (output is not None and "target" in output and "tagName" in output["target"]
-            and output["target"]["tagName"] == "plot-marker"):
-        st.write("Value of clicked bar:", output["target"]["values"]["Total Minutes"])
-
-# Display the data table if available
+# 如果可用，顯示數據表
 if st.session_state.data_table is not None:
     st.caption("Data shown on the chart")
     st.dataframe(st.session_state.data_table)
