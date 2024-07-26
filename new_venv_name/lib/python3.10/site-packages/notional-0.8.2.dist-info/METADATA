@@ -1,0 +1,94 @@
+Metadata-Version: 2.1
+Name: notional
+Version: 0.8.2
+Summary: A high-level interface for the Notion SDK.
+Home-page: https://github.com/jheddings/notional/
+License: MIT
+Author: Jason Heddings
+Author-email: jheddings@gmail.com
+Requires-Python: >=3.8.1,<4.0.0
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Dist: emoji (>=2.11.1,<3.0.0)
+Requires-Dist: html5lib (>=1.1,<2.0)
+Requires-Dist: notion-client (>=2.2.1,<3.0.0)
+Requires-Dist: pydantic (>=1.10.15,<2.0.0)
+Requires-Dist: urllib3 (>=1.26.18,<2.0.0)
+Project-URL: Documentation, https://jheddings.github.io/notional/
+Project-URL: Repository, https://github.com/jheddings/notional/
+Description-Content-Type: text/markdown
+
+# notional #
+
+[![PyPI](https://img.shields.io/pypi/v/notional.svg)](https://pypi.org/project/notional)
+[![LICENSE](https://img.shields.io/github/license/jheddings/notional)](LICENSE)
+[![Style](https://img.shields.io/badge/style-black-black)](https://github.com/ambv/black)
+
+A high level interface and object model for the Notion SDK.  This is loosely modeled
+after concepts found in [SQLAlchemy](http://www.sqlalchemy.org) and
+[MongoEngine](http://mongoengine.org).  Built on the excellent
+[notion-sdk-py](https://github.com/ramnes/notion-sdk-py) library, this module provides
+higher-level access to the API.
+
+> :warning: **Work In Progress**: The interfaces in this module are still in development
+and are likely to change.  Furthermore, documentation is pretty sparse so use at your
+own risk!
+
+That being said, if you do use this library, please
+[drop me a message](https://github.com/jheddings/notional/discussions)!
+
+## Installation ##
+
+Install the most recent release using PyPi:
+
+```shell
+pip install notional
+```
+
+*Note:* it is recommended to use a virtual environment (`venv`) for installing libraries
+to prevent conflicting dependency versions.
+
+## Usage ##
+
+Connect to the API using an integration token or an OAuth access token:
+
+```python
+import notional
+
+notion = notional.connect(auth=AUTH_TOKEN)
+
+# ¡¡ fun & profit !!
+```
+
+## Getting Help ##
+
+If you are stuck, the best place to start is the
+[Discussion](https://github.com/jheddings/notional/discussions) area.  Use this also as
+a resource for asking questions or providing general suggestions.
+
+### Known Issues ###
+
+See [Issues](https://github.com/jheddings/notional/issues) on github.
+
+### Feature Requests ###
+
+See [Issues](https://github.com/jheddings/notional/issues) on github.
+
+## Contributing ##
+
+I built this module so that I could interact with Notion in a way that made sense to
+me.  Hopefully, others will find it useful.  If someone is particularly passionate about
+this area, I would be happy to consider other maintainers or contributors.
+
+Any pull requests or other submissions are welcome.  As most open source projects go, this
+is a side project.  Large submissions will take time to review for acceptance, so breaking
+them into smaller pieces is always preferred.  Thanks in advance!
+
+To get started, please read the full [contribution guide](.github/CONTRIBUTING.md).
+

@@ -1,3 +1,4 @@
+import json
 import os
 import asyncio
 import aiohttp
@@ -22,6 +23,8 @@ FETCH_TIMEOUT = 900
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
+PROGRESS_FILE = 'progress.json'
+
 # Function to validate Notion API Token
 def is_valid_token(token):
     return len(token) >= 20
@@ -29,7 +32,6 @@ def is_valid_token(token):
 # Function to validate Notion Database ID
 def is_valid_database_id(database_id):
     return len(database_id) == 32
-
 
 async def check_network():
     try:
@@ -54,8 +56,8 @@ async def smart_retry(func, *args, **kwargs):
         try:
             return await func(*args, **kwargs)
         except aiohttp.ClientResponseError as e:
-            if e.status in {504, 502}:
-                logging.warning(f"Server error {e.status}. Attempt {attempt + 1}/{MAX_RETRIES}")
+            if e.status == 504:
+                logging.warning(f"Gateway Timeout. Attempt {attempt + 1}/{MAX_RETRIES}")
             elif e.status == 429:
                 logging.warning(f"Rate limit exceeded. Attempt {attempt + 1}/{MAX_RETRIES}")
             else:
@@ -69,6 +71,15 @@ async def smart_retry(func, *args, **kwargs):
             await exponential_backoff(attempt)
     raise Exception(f"Failed after {MAX_RETRIES} retries")
 
+def load_progress():
+    if os.path.exists(PROGRESS_FILE):
+        with open(PROGRESS_FILE, 'r') as file:
+            return json.load(file)
+    return {'start_cursor': None, 'total_retrieved': 0, 'queried_page_ids': []}
+
+def save_progress(progress):
+    with open(PROGRESS_FILE, 'w') as file:
+        json.dump(progress, file)
 
 class NotionDataVisualizer:
     def __init__(self):
@@ -97,7 +108,7 @@ class NotionDataVisualizer:
                 f.write(f"NOTION_HABITS_DATABASE_ID={self.database_id}\n")
             st.success("配置已保存到 .env 文件中")
             self.is_configured = True
-            st.session_state.configuration_loaded = False  # Reset the flag to show the success message again
+            st.session_state.configuration_loaded = False
             st.session_state.show_config_message = True
             st.rerun()
 
@@ -108,7 +119,6 @@ class NotionDataVisualizer:
         else:
             st.warning("请确保输入的 Notion API Token 和数据库 ID 符合格式要求。")
 
-
     async def fetch(self, session, url, method='GET', query_params=None, headers=None, **kwargs):
         headers = headers or {
             "Authorization": f"Bearer {self.token}",
@@ -117,7 +127,7 @@ class NotionDataVisualizer:
         
         if "databases" in url:
             headers["Content-Type"] = "application/json"
-            
+        
         try:
             async with session.request(method, url, headers=headers, json=query_params, **kwargs) as response:
                 response.raise_for_status()
@@ -137,17 +147,22 @@ class NotionDataVisualizer:
         except Exception as e:
             st.error(f"Request failed: {e}")
             return None
-                            
-    async def get_notion_data(self):
+
+
+
+    async def get_notion_data(self, start_cursor=None, total_retrieved=0, queried_page_ids=None):
         url = f"https://api.notion.com/v1/databases/{self.database_id}/query"
         async with aiohttp.ClientSession() as session:
             has_more = True
-            start_cursor = None
             results = []
-            page_count = 0
+            page_count = total_retrieved
+            threshold_page = 180  # Set threshold page number
+            queried_page_ids = set(queried_page_ids or [])
 
-            while has_more:
-                query_params = {"page_size": 25}  # Adjust the page size if needed
+            while has_more and page_count < 600:
+                page_size = 100 if page_count < threshold_page else 25
+                
+                query_params = {"page_size": page_size}
                 if start_cursor:
                     query_params['start_cursor'] = start_cursor
 
@@ -156,17 +171,40 @@ class NotionDataVisualizer:
                     
                     if response:
                         fetched_results = response.get('results', [])
-                        page_count += len(fetched_results)
-                        results.extend(fetched_results)
-                        has_more = response.get('has_more', False)
-                        start_cursor = response.get('next_cursor', None)
+                        new_results = [page for page in fetched_results if page['id'] not in queried_page_ids]
+                        
+                        if not new_results:
+                            logging.warning(f"No new results found in this batch. Current page count: {page_count}")
+                            start_cursor = response.get('next_cursor')
+                            if not start_cursor:
+                                logging.info("No more pages to retrieve.")
+                                break
+                            continue
 
-                        logging.info(f"Retrieved {page_count} items so far.")
+                        page_count += len(new_results)
+                        results.extend(new_results)
+                        queried_page_ids.update(page['id'] for page in new_results)
+                        
+                        has_more = response.get('has_more', False)
+                        start_cursor = response.get('next_cursor')
+
+                        # Extract Page Name titles
+                        page_names = [page['properties']['Name']['title'][0]['plain_text'] for page in new_results if 'properties' in page and 'Name' in page['properties'] and 'title' in page['properties']['Name']]
+                        
+                        logging.info(f"Current page count: {page_count}")
                         if start_cursor:
-                            logging.info(f"Next start_cursor: {start_cursor}")
+                            logging.info(f"Next start_cursor: {page_names[-1] if page_names else 'Unknown'}")
                         else:
                             logging.info("No more pages to retrieve.")
-                        await asyncio.sleep(1)  # Add a short delay between requests
+
+                        # Save progress after each batch
+                        save_progress({
+                            'start_cursor': start_cursor, 
+                            'total_retrieved': page_count,
+                            'queried_page_ids': list(queried_page_ids)
+                        })
+
+                        await asyncio.sleep(2)  # Adjust delay between requests
                     else:
                         has_more = False
 
@@ -175,7 +213,9 @@ class NotionDataVisualizer:
                     break
 
         logging.info(f"Total items retrieved: {page_count}")
-        return {'results': results}
+        return {'results': results, 'total_retrieved': page_count, 'queried_page_ids': list(queried_page_ids), 'start_cursor': start_cursor}
+
+    
 
     async def get_page_name(self, session, page_id):
         url = f"https://api.notion.com/v1/pages/{page_id}"
@@ -202,72 +242,74 @@ class NotionDataVisualizer:
                     categories['No Parent'] += total_mins
 
             parent_names = await asyncio.gather(*tasks)
-            for i, parent_name in enumerate(parent_names):
+            for parent_name in parent_names:
                 if parent_name not in categories:
                     categories[parent_name] = 0
-                categories[parent_name] += data['results'][i]['properties'][TOTAL_MINUTES_FOR_PARENT_HABIT]['formula']['number']
+                categories[parent_name] += total_mins
 
-        return categories
+        sorted_categories = sorted(categories.items(), key=lambda x: x[1], reverse=True)
+        df = pd.DataFrame(sorted_categories, columns=["Category", "Total Minutes"])
+        return df
 
 
-    @st.cache_data
-    def visualize_data(_self, data):
-        names = list(data.keys())
-        values = [data[name] for name in names]
+    async def generate_visualization(self):
+        progress = load_progress()
+        start_cursor = progress.get('start_cursor')
+        total_retrieved = progress.get('total_retrieved', 0)
+        queried_page_ids = set(progress.get('queried_page_ids', []))
 
-        df = pd.DataFrame({
-            'Parent Category': names,
-            'Total Minutes': values
-        })
+        all_results = []
+        page_limit = 600
+        last_total_retrieved = 0
 
-        chart = VizzuChart()
-        data_vizzu = Data()
-        data_vizzu.add_df(df)
-        chart.animate(data_vizzu)
+        while total_retrieved < page_limit:
+            data = await self.get_notion_data(start_cursor=start_cursor, total_retrieved=total_retrieved, queried_page_ids=queried_page_ids)
+            all_results.extend(data['results'])
+            total_retrieved = data['total_retrieved']
+            queried_page_ids = set(data['queried_page_ids'])
+            start_cursor = data['start_cursor']
+            
+            logging.info(f"Total items retrieved: {total_retrieved}")
+
+            if total_retrieved == last_total_retrieved:
+                logging.warning("No new items retrieved in this iteration. Breaking the loop.")
+                break
+
+            last_total_retrieved = total_retrieved
+
+            if total_retrieved >= 400 and total_retrieved < page_limit:
+                logging.info("Reached 400 pages. Continuing to retrieve up to 600 pages.")
+                await asyncio.sleep(30)  # Wait for 30 seconds before continuing
+
+            # Save progress after each batch
+            save_progress({
+                'start_cursor': start_cursor, 
+                'total_retrieved': total_retrieved,
+                'queried_page_ids': list(queried_page_ids)
+            })
+
+            if not start_cursor or total_retrieved >= page_limit:
+                logging.info(f"Reached page limit of {page_limit} or no more pages to retrieve.")
+                break
+
+        logging.info(f"Finished retrieving data. Total pages: {total_retrieved}")
+
+        # Process data and generate visualization
+        df = await self.process_data({'results': all_results})
         
-        config = Config({
-            "channels": {
-                "color": {"set": ["Parent Category"]},
-                "size": {"set": ["Total Minutes"]}
-            },
-            "title": "主习惯大类占比",
-            "geometry": "circle"
-        })
-        
+        # Generate CSV file
+        df.to_csv('habits.csv', index=False)
+        logging.info("Generated habits.csv file")
+
+        chart = VizzuChart(height=360, width=480)
+        data = Data()
+        data.add_df(df)
+
+        chart.animate(data)
+        config = Config({"x": "Total Minutes", "y": "Category", "label": "Total Minutes", "title": "Category vs Total Minutes"})
         chart.animate(config)
 
         return chart, df
-
-    async def generate_visualization(self):
-        csv_dir = 'data'
-        csv_file_path = os.path.join(csv_dir, 'habits.csv')
-       
-        # Ensure the directory exists
-        if not os.path.exists(csv_dir):
-            os.makedirs(csv_dir)
-        
-        if os.path.exists(csv_file_path):
-            # 如果 CSV 文件存在，则读取它
-            df = pd.read_csv(csv_file_path)
-            processed_data = df.set_index('Parent Category')['Total Minutes'].to_dict()
-            # 使用缓存数据进行可视化
-            chart, df_viz = self.visualize_data(processed_data)
-            return chart, df_viz
-        else:
-            # 否则，从 Notion 获取数据
-            raw_data = await self.get_notion_data()
-            if raw_data:
-                processed_data = await self.process_data(raw_data)
-                # 保存处理后的数据到 CSV 文件
-                df = pd.DataFrame({
-                    'Parent Category': list(processed_data.keys()),
-                    'Total Minutes': list(processed_data.values())
-                })
-                df.to_csv(csv_file_path, index=False)
-                # 使用缓存数据进行可视化
-                chart, df_viz = self.visualize_data(processed_data)
-                return chart, df_viz
-            return None, None
 
 # Streamlit app
 st.title("Notion Data Visualization")
@@ -312,16 +354,18 @@ if not st.session_state.show_loader and visualizer.is_configured:
 # Handle loader logic and visualization generation
 if st.session_state.show_loader:
     with st.spinner("正在生成可视化..."):
-        chart, df = asyncio.run(visualizer.generate_visualization())
-    
-    if chart:
-        st.session_state.visualization_fig = chart
-        st.session_state.data_table = df
-    else:
-        st.error("数据处理失败，请检查 API 配置和数据。")
+        try:
+            chart, df = asyncio.run(visualizer.generate_visualization())
+            if chart:
+                st.session_state.visualization_fig = chart
+                st.session_state.data_table = df
+            else:
+                st.error("数据处理失败，请检查 API 配置和数据。")
+        except Exception as e:
+            st.error(f"生成可视化时发生错误: {e}")
     
     st.session_state.show_loader = False
-    st.rerun()  # Ensure the visualization is shown properly
+    st.rerun()
 
 # Display the generated visualization if available
 if st.session_state.visualization_fig:
