@@ -464,9 +464,3 @@ if st.session_state.data_table is not None or (st.session_state.csv_checked and 
 if st.session_state.data_table is not None:
     st.caption("Data shown on the chart")
     st.dataframe(st.session_state.data_table)
-
-st.write(
-    "Check the [source code](https://github.com/vizzu-streamlit/streamlit-vizzu) "
-    "of the bidirectional component that makes this possible, created by "
-    "[blackary](https://github.com/blackary)"
-)
