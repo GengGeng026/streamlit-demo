@@ -251,7 +251,7 @@ class NotionDataVisualizer:
             return page_data['properties'][TASK_NOTION_NAME]['title'][0]['plain_text']
         else:
             return "Unknown"
-        
+            
     async def process_data(self, data):
         categories = {}
         async with aiohttp.ClientSession() as session:
@@ -264,9 +264,8 @@ class NotionDataVisualizer:
                     parent_id = parent['relation'][0]['id']
                     tasks.append(self.get_page_name(session, parent_id))
                 else:
-                    if 'No Parent' not in categories:
-                        categories['No Parent'] = 0
-                    categories['No Parent'] += total_mins
+                    # 直接将主习惯加入 categories，而不需要处理 'No Parent'
+                    categories[result['properties']['Name']['title'][0]['plain_text']] = total_mins
 
             parent_names = await asyncio.gather(*tasks)
             for parent_name in parent_names:
@@ -277,6 +276,7 @@ class NotionDataVisualizer:
         sorted_categories = sorted(categories.items(), key=lambda x: x[1], reverse=True)
         df = pd.DataFrame(sorted_categories, columns=["Category", "Total Minutes"])
         return df
+
 
 
     async def generate_visualization(self):
