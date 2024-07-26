@@ -33,7 +33,7 @@ data = {
             "direction": "descending"
         }
     ],
-    "page_size": 5  # 设置每页返回记录数为 5
+    "page_size": 5
 }
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -96,6 +96,37 @@ def save_progress(progress):
     with open(PROGRESS_FILE, 'w') as file:
         json.dump(progress, file)
 
+def check_csv_and_generate_chart():
+    if os.path.exists('habits.csv'):
+        df = pd.read_csv('habits.csv')
+        chart = create_chart(df)
+        st.session_state.visualization_fig = chart
+        st.session_state.data_table = df
+        return True
+    return False
+
+def clear_progress_and_regenerate():
+    if os.path.exists(PROGRESS_FILE):
+        os.remove(PROGRESS_FILE)
+    
+    st.session_state.show_loader = True
+    st.session_state.csv_checked = False
+    st.session_state.visualization_fig = None
+    st.session_state.data_table = None
+
+    st.rerun()
+
+def create_chart(df):
+    chart = VizzuChart(height=360, width=480)
+    data = Data()
+    data.add_df(df)
+
+    chart.animate(data)
+    config = Config({"x": "Total Minutes", "y": "Category", "label": "Total Minutes", "title": "Category vs Total Minutes"})
+    chart.animate(config)
+
+    return chart
+
 class NotionDataVisualizer:
     def __init__(self):
         load_dotenv()
@@ -106,8 +137,8 @@ class NotionDataVisualizer:
         self.is_configured = self.token and self.database_id
 
         if not self.is_configured:
-            self.token = st.text_input("请输入Notion API Token:", key='token', placeholder='请输入有效的 API Token', help="确保 Token 长度符合要求")
-            self.database_id = st.text_input("请输入Notion数据库ID:", key='database_id', placeholder='请输入有效的数据库 ID', help="确保数据库 ID 长度符合要求")
+            self.token = st.text_input("請輸入Notion API Token:", key='token', placeholder='請輸入有效的 API Token', help="確保 Token 長度符合要求")
+            self.database_id = st.text_input("請輸入Notion數據庫ID:", key='database_id', placeholder='請輸入有效的數據庫 ID', help="確保數據庫 ID 長度符合要求")
             self.show_save_button()
         else:
             if 'configuration_loaded' not in st.session_state:
@@ -132,7 +163,7 @@ class NotionDataVisualizer:
             if st.button("保存配置"):
                 self.save_config()
         else:
-            st.warning("请确保输入的 Notion API Token 和数据库 ID 符合格式要求。")
+            st.warning("請確保輸入的 Notion API Token 和數據庫 ID 符合格式要求。")
 
     data = {
         "filter": {
@@ -157,7 +188,6 @@ class NotionDataVisualizer:
         if query_params is None:
             query_params = {}
         
-        # 添加 filter 和 sort 到 query_params
         query_params.update(data)
         
         try:
@@ -189,7 +219,7 @@ class NotionDataVisualizer:
             queried_page_ids = set(queried_page_ids or [])
 
             while has_more:
-                page_size = 5  # 设置每页返回记录数为 5
+                page_size = 5
 
                 query_params = {"page_size": page_size}
                 if start_cursor:
@@ -217,7 +247,6 @@ class NotionDataVisualizer:
                         has_more = response.get('has_more', False)
                         start_cursor = response.get('next_cursor')
 
-                        # Extract Page Name titles
                         page_names = [page['properties']['Name']['title'][0]['plain_text'] for page in new_results if 'properties' in page and 'Name' in page['properties'] and 'title' in page['properties']['Name']]
                         
                         logging.info(f"Current page count: {page_count}")
@@ -226,14 +255,13 @@ class NotionDataVisualizer:
                         else:
                             logging.info("No more pages to retrieve.")
 
-                        # Save progress after each batch
                         save_progress({
                             'start_cursor': start_cursor, 
                             'total_retrieved': page_count,
                             'queried_page_ids': list(queried_page_ids)
                         })
 
-                        await asyncio.sleep(1)  # 调整请求之间的延时
+                        await asyncio.sleep(1)
                     else:
                         has_more = False
 
@@ -264,7 +292,6 @@ class NotionDataVisualizer:
                     parent_id = parent['relation'][0]['id']
                     tasks.append(self.get_page_name(session, parent_id))
                 else:
-                    # 直接将主习惯加入 categories，而不需要处理 'No Parent'
                     categories[result['properties']['Name']['title'][0]['plain_text']] = total_mins
 
             parent_names = await asyncio.gather(*tasks)
@@ -277,13 +304,10 @@ class NotionDataVisualizer:
         df = pd.DataFrame(sorted_categories, columns=["Category", "Total Minutes"])
         return df
 
-
-
     async def generate_visualization(self):
-        progress = load_progress()
-        start_cursor = progress.get('start_cursor')
-        total_retrieved = progress.get('total_retrieved', 0)
-        queried_page_ids = set(progress.get('queried_page_ids', []))
+        start_cursor = None
+        total_retrieved = 0
+        queried_page_ids = set()
 
         all_results = []
         page_limit = 600
@@ -306,9 +330,8 @@ class NotionDataVisualizer:
 
             if total_retrieved >= 400 and total_retrieved < page_limit:
                 logging.info("Reached 400 pages. Continuing to retrieve up to 600 pages.")
-                await asyncio.sleep(30)  # Wait for 30 seconds before continuing
+                await asyncio.sleep(30)
 
-            # Save progress after each batch
             save_progress({
                 'start_cursor': start_cursor, 
                 'total_retrieved': total_retrieved,
@@ -321,20 +344,12 @@ class NotionDataVisualizer:
 
         logging.info(f"Finished retrieving data. Total pages: {total_retrieved}")
 
-        # Process data and generate visualization
         df = await self.process_data({'results': all_results})
         
-        # Generate CSV file
         df.to_csv('habits.csv', index=False)
         logging.info("Generated habits.csv file")
 
-        chart = VizzuChart(height=360, width=480)
-        data = Data()
-        data.add_df(df)
-
-        chart.animate(data)
-        config = Config({"x": "Total Minutes", "y": "Category", "label": "Total Minutes", "title": "Category vs Total Minutes"})
-        chart.animate(config)
+        chart = create_chart(df)
 
         return chart, df
 
@@ -366,26 +381,33 @@ if 'data_table' not in st.session_state:
     st.session_state.data_table = None
 if 'show_config_message' not in st.session_state:
     st.session_state.show_config_message = False
+if 'is_vertical' not in st.session_state:
+    st.session_state.is_vertical = False
 
-# Show "配置已加载" message if needed
+# Show "配置已加載" message if needed
 if st.session_state.show_config_message and visualizer.is_configured:
-    st.success("配置已加载")
+    st.success("配置已加載")
     st.session_state.show_config_message = False
 
-# Show "Generate Visualization" button only if not loading
-if not st.session_state.show_loader and visualizer.is_configured:
-    if st.button("Generate Visualization"):
-        st.session_state.show_loader = True
-        st.rerun()
+# Check for habits.csv and show appropriate button
+if os.path.exists('habits.csv'):
+    if st.button("Re-generate Visualization"):
+        clear_progress_and_regenerate()
+else:
+    if not st.session_state.show_loader and visualizer.is_configured:
+        if st.button("Generate Visualization"):
+            st.session_state.show_loader = True
+            st.rerun()
 
 # Handle loader logic and visualization generation
 if st.session_state.show_loader:
-    with st.spinner("正在生成可视化..."):
+    with st.spinner("正在獲取頁面 ..."):
         try:
             chart, df = asyncio.run(visualizer.generate_visualization())
             if chart:
                 st.session_state.visualization_fig = chart
                 st.session_state.data_table = df
+                st.session_state.csv_checked = True
             else:
                 st.error("数据处理失败，请检查 API 配置和数据。")
         except Exception as e:
@@ -394,11 +416,58 @@ if st.session_state.show_loader:
     st.session_state.show_loader = False
     st.rerun()
 
+# Check for habits.csv and generate chart if it exists
+if 'csv_checked' not in st.session_state:
+    st.session_state.csv_checked = check_csv_and_generate_chart()
+
 # Display the generated visualization if available
 if st.session_state.visualization_fig:
-    st.session_state.visualization_fig.show()
+    # Add checkbox for swapping between horizontal and vertical charts
+    is_vertical = st.checkbox("Swap to Vertical Chart", value=st.session_state.is_vertical)
+    
+    if is_vertical != st.session_state.is_vertical:
+        st.session_state.is_vertical = is_vertical
+        
+        # Create a new chart with the updated orientation
+        df = st.session_state.data_table
+        chart = VizzuChart(height=360, width=480)
+        data = Data()
+        data.add_df(df)
+        chart.animate(data)
+        
+        if is_vertical:
+            config = Config({
+                "x": "Category", 
+                "y": "Total Minutes", 
+                "label": "Total Minutes",
+                "title": "Category vs Total Minutes (Vertical)"
+            })
+        else:
+            config = Config({
+                "x": "Total Minutes", 
+                "y": "Category", 
+                "label": "Total Minutes",
+                "title": "Category vs Total Minutes (Horizontal)"
+            })
+        
+        chart.animate(config)
+        st.session_state.visualization_fig = chart
+
+    # Display the chart
+    output = st.session_state.visualization_fig.show()
+
+    # Handle click events on the chart
+    if (output is not None and "target" in output and "tagName" in output["target"]
+            and output["target"]["tagName"] == "plot-marker"):
+        st.write("Value of clicked bar:", output["target"]["values"]["Total Minutes"])
 
 # Display the data table if available
 if st.session_state.data_table is not None:
     st.caption("Data shown on the chart")
     st.dataframe(st.session_state.data_table)
+
+st.write(
+    "Check the [source code](https://github.com/vizzu-streamlit/streamlit-vizzu) "
+    "of the bidirectional component that makes this possible, created by "
+    "[blackary](https://github.com/blackary)"
+)
