@@ -20,6 +20,21 @@ MAX_RETRIES = 30
 INITIAL_RETRY_DELAY = 5
 MAX_RETRY_DELAY = 300
 FETCH_TIMEOUT = 900
+data = {
+    "filter": {
+        "property": "Total min Par",
+        "number": {
+            "greater_than": 0
+        }
+    },
+    "sorts": [
+        {
+            "property": "Total min Par",
+            "direction": "descending"
+        }
+    ],
+    "page_size": 5  # 设置每页返回记录数为 5
+}
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
@@ -119,7 +134,18 @@ class NotionDataVisualizer:
         else:
             st.warning("请确保输入的 Notion API Token 和数据库 ID 符合格式要求。")
 
-    async def fetch(self, session, url, method='GET', query_params=None, headers=None, **kwargs):
+    data = {
+        "filter": {
+            "value": "page",
+            "property": "object"
+        },
+        "sort": {
+            "direction": "descending",
+            "formula": TOTAL_MINUTES_FOR_PARENT_HABIT
+        }
+    }
+
+    async def fetch(self, session, url, method='POST', query_params=None, headers=None, **kwargs):
         headers = headers or {
             "Authorization": f"Bearer {self.token}",
             "Notion-Version": "2022-06-28"
@@ -127,6 +153,12 @@ class NotionDataVisualizer:
         
         if "databases" in url:
             headers["Content-Type"] = "application/json"
+        
+        if query_params is None:
+            query_params = {}
+        
+        # 添加 filter 和 sort 到 query_params
+        query_params.update(data)
         
         try:
             async with session.request(method, url, headers=headers, json=query_params, **kwargs) as response:
@@ -148,20 +180,17 @@ class NotionDataVisualizer:
             st.error(f"Request failed: {e}")
             return None
 
-
-
     async def get_notion_data(self, start_cursor=None, total_retrieved=0, queried_page_ids=None):
         url = f"https://api.notion.com/v1/databases/{self.database_id}/query"
         async with aiohttp.ClientSession() as session:
             has_more = True
             results = []
             page_count = total_retrieved
-            threshold_page = 180  # Set threshold page number
             queried_page_ids = set(queried_page_ids or [])
 
-            while has_more and page_count < 600:
-                page_size = 100 if page_count < threshold_page else 25
-                
+            while has_more:
+                page_size = 5  # 设置每页返回记录数为 5
+
                 query_params = {"page_size": page_size}
                 if start_cursor:
                     query_params['start_cursor'] = start_cursor
@@ -204,7 +233,7 @@ class NotionDataVisualizer:
                             'queried_page_ids': list(queried_page_ids)
                         })
 
-                        await asyncio.sleep(2)  # Adjust delay between requests
+                        await asyncio.sleep(1)  # 调整请求之间的延时
                     else:
                         has_more = False
 
@@ -214,8 +243,6 @@ class NotionDataVisualizer:
 
         logging.info(f"Total items retrieved: {page_count}")
         return {'results': results, 'total_retrieved': page_count, 'queried_page_ids': list(queried_page_ids), 'start_cursor': start_cursor}
-
-    
 
     async def get_page_name(self, session, page_id):
         url = f"https://api.notion.com/v1/pages/{page_id}"
