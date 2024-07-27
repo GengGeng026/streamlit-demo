@@ -418,6 +418,8 @@ if 'is_vertical' not in st.session_state:
     st.session_state.is_vertical = False
 if 'show_tools' not in st.session_state:
     st.session_state.show_tools = False  # 默认隐藏工具
+if 'show_table' not in st.session_state:
+    st.session_state.show_table = False  # 默认隐藏表格
 if 'num_items' not in st.session_state:
     st.session_state.num_items = 20  # 默认显示的项目数
 if 'selected_chart_type' not in st.session_state:
@@ -445,11 +447,20 @@ with col1:
 
 with col4:
     # 使用复选框来控制工具的显示状态
-    show_tools = st.checkbox("Hide" if st.session_state.show_tools else "Show Tools", value=st.session_state.show_tools)
+    show_tools = st.checkbox("HIDE TOOLS" if st.session_state.show_tools else "TOOLS", value=st.session_state.show_tools)
 
     # 更新 session state 中的工具显示状态
     if show_tools != st.session_state.show_tools:
         st.session_state.show_tools = show_tools
+        st.rerun()  # 强制重新渲染页面
+
+with col3:
+    # 使用复选框来控制表格的显示状态
+    show_table = st.checkbox("TABLE", value=st.session_state.show_table)
+
+    # 更新 session state 中的表格显示状态
+    if show_table != st.session_state.show_table:
+        st.session_state.show_table = show_table
         st.rerun()  # 强制重新渲染页面
 
 # 定义 num_items、selected_chart_type 和 orientation，确保它们在任何情况下都被定义
@@ -515,7 +526,14 @@ if st.session_state.data_table is not None or (st.session_state.csv_checked and 
     # 显示图表
     st.plotly_chart(fig)
 
-# 如果可用，显示数据表
-if st.session_state.data_table is not None:
+# 如果可用且选中，显示数据表
+if st.session_state.show_table:
     st.caption("Data shown on the chart")
-    st.dataframe(st.session_state.data_table)
+    # 确保 data_table 已经正确加载
+    if st.session_state.data_table is not None:
+        st.dataframe(st.session_state.data_table)
+    elif os.path.exists('habits.csv'):
+        df = pd.read_csv('habits.csv')
+        st.dataframe(df)
+    else:
+        st.warning("数据表尚未加载。")
