@@ -11,6 +11,13 @@ import logging
 from typing import List, Dict, Tuple
 import plotly.express as px
 import plotly.graph_objects as go
+from functools import lru_cache
+
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+# File to store settings
+SETTINGS_FILE = 'chart_settings.json'
+PROGRESS_FILE = 'progress.json'
 
 # Constants
 TASK_NOTION_NAME = 'Name'
@@ -37,10 +44,6 @@ data = {
     ],
     "page_size": 5
 }
-
-logging.basicConfig(level=logging.INFO, format='%(message)s')
-
-PROGRESS_FILE = 'progress.json'
 
 # Function to validate Notion API Token
 def is_valid_token(token):
@@ -376,18 +379,18 @@ class NotionDataVisualizer:
         return df
 
 
-# Custom CSS for centering the title
-custom_css = """
-<style>
-h1 {
-    text-align: left;
-}
-</style>
-"""
-st.markdown(custom_css, unsafe_allow_html=True)
+# # Custom CSS for centering the title
+# custom_css = """
+# <style>
+# h1 {
+#     text-align: left;
+# }
+# </style>
+# """
+# st.markdown(custom_css, unsafe_allow_html=True)
 
-# Main title
-st.markdown("<h1>DASH</h1>", unsafe_allow_html=True)
+# # Main title
+# st.markdown("<h1>DASH</h1>", unsafe_allow_html=True)
 
 # Custom CSS for input field color change
 custom_css = """
@@ -405,22 +408,67 @@ st.markdown(custom_css, unsafe_allow_html=True)
 # Initialize visualizer
 visualizer = NotionDataVisualizer()
 
-# Initialize session state variables if they don't exist
-if 'show_tools' not in st.session_state:
-    st.session_state.show_tools = False
-if 'show_table' not in st.session_state:
-    st.session_state.show_table = False
-if 'num_items' not in st.session_state:
-    st.session_state.num_items = 20
-if 'selected_chart_type' not in st.session_state:
-    st.session_state.selected_chart_type = 'bar'
-if 'orientation' not in st.session_state:
-    st.session_state.orientation = 'horizontal'
-if 'chart_width' not in st.session_state:
-    st.session_state.chart_width = 700
-if 'chart_height' not in st.session_state:
-    st.session_state.chart_height = 500
 
+@lru_cache(maxsize=1)
+def load_settings():
+    """Load settings from file, cached to reduce disk I/O"""
+    if os.path.exists(SETTINGS_FILE):
+        with open(SETTINGS_FILE, 'r') as f:
+            return json.load(f)
+    return None
+
+def save_settings(settings):
+    """Save current settings to a file"""
+    with open(SETTINGS_FILE, 'w') as f:
+        json.dump(settings, f)
+
+def get_setting(key, default_value):
+    """Get a setting value, initializing if necessary"""
+    if key not in st.session_state:
+        saved_settings = load_settings()
+        st.session_state[key] = saved_settings.get(key, default_value) if saved_settings else default_value
+    return st.session_state[key]
+
+def set_setting(key, value):
+    """Set a setting value and save settings"""
+    if st.session_state.get(key) != value:
+        st.session_state[key] = value
+        save_settings({k: v for k, v in st.session_state.items() if not k.startswith('_')})
+
+# Initialize settings
+show_tools = get_setting('show_tools', False)
+show_table = get_setting('show_table', False)
+num_items = get_setting('num_items', 20)
+selected_chart_type = get_setting('selected_chart_type', 'bar')
+orientation = get_setting('orientation', 'vertical')
+chart_width = get_setting('chart_width', 700)
+chart_height = get_setting('chart_height', 500)
+
+
+# Initialize session state
+if 'show_loader' not in st.session_state:
+    st.session_state.show_loader = False
+if 'visualization_fig' not in st.session_state:
+    st.session_state.visualization_fig = None
+if 'data_table' not in st.session_state:
+    st.session_state.data_table = None
+if 'show_config_message' not in st.session_state:
+    st.session_state.show_config_message = False
+if 'is_vertical' not in st.session_state:
+    st.session_state.is_vertical = False
+if 'show_tools' not in st.session_state:
+    st.session_state.show_tools = False  # 默认隐藏工具
+if 'show_table' not in st.session_state:
+    st.session_state.show_table = False  # 默认隐藏表格
+if 'num_items' not in st.session_state:
+    st.session_state.num_items = 20  # 默认显示的项目数
+if 'selected_chart_type' not in st.session_state:
+    st.session_state.selected_chart_type = 'bar'  # 默认图表类型
+if 'orientation' not in st.session_state:
+    st.session_state.orientation = 'horizontal'  # 默认方向
+if 'csv_checked' not in st.session_state:
+    st.session_state.csv_checked = True
+    
 # Show "配置已加载" message if needed
 if st.session_state.show_config_message and visualizer.is_configured:
     st.success("配置已加载")
@@ -440,45 +488,48 @@ with col1:
                 st.rerun()
 
 with col4:
-    show_tools = st.checkbox("HIDE TOOLS" if st.session_state.show_tools else "TOOLS", value=st.session_state.show_tools)
-    if show_tools != st.session_state.show_tools:
-        st.session_state.show_tools = show_tools
+    new_show_tools = st.checkbox("HIDE TOOLS" if show_tools else "TOOLS", value=show_tools)
+    if new_show_tools != show_tools:
+        set_setting('show_tools', new_show_tools)
         st.rerun()
-
+        
 with col3:
-    show_table = st.checkbox("TABLE", value=st.session_state.show_table)
-    if show_table != st.session_state.show_table:
-        st.session_state.show_table = show_table
+    new_show_table = st.checkbox("TABLE", value=show_table)
+    if new_show_table != show_table:
+        set_setting('show_table', new_show_table)
         st.rerun()
-
 
 # Tools section
-if st.session_state.show_tools:
-    # Chart type selector
+if show_tools:
     chart_types = ['bar', 'scatter', 'treemap']
-    st.session_state.selected_chart_type = st.selectbox("Select Chart Type", chart_types, index=chart_types.index(st.session_state.selected_chart_type))
+    new_chart_type = st.selectbox("Select Chart Type", chart_types, index=chart_types.index(selected_chart_type))
+    if new_chart_type != selected_chart_type:
+        set_setting('selected_chart_type', new_chart_type)
+        st.rerun()
 
-    # Orientation selector (only for bar charts)
-    if st.session_state.selected_chart_type == 'bar':
+    if selected_chart_type == 'bar':
         orientations = ['horizontal', 'vertical']
-        st.session_state.orientation = st.radio("Select Orientation", orientations, index=orientations.index(st.session_state.orientation))
-    else:
-        st.session_state.orientation = 'horizontal'
+        new_orientation = st.radio("Select Orientation", orientations, index=orientations.index(orientation))
+        if new_orientation != orientation:
+            set_setting('orientation', new_orientation)
+            st.rerun()
 
-    # Number of items slider
-    df = st.session_state.data_table if st.session_state.data_table is not None else pd.read_csv('habits.csv') if os.path.exists('habits.csv') else pd.DataFrame()
-    st.session_state.num_items = st.slider("Number of items to display", min_value=5, max_value=len(df) if len(df) > 0 else 20, value=st.session_state.num_items)
+    new_num_items = st.slider("Number of items to display", min_value=5, max_value=20, value=num_items)
+    if new_num_items != num_items:
+        set_setting('num_items', new_num_items)
+        st.rerun()
 
-    # Chart size sliders
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.chart_width = st.slider("Chart Width", min_value=400, max_value=1200, value=st.session_state.chart_width)
+        new_chart_width = st.slider("Chart Width", min_value=400, max_value=1200, value=chart_width)
+        if new_chart_width != chart_width:
+            set_setting('chart_width', new_chart_width)
+            st.rerun()
     with col2:
-        st.session_state.chart_height = st.slider("Chart Height", min_value=300, max_value=1000, value=st.session_state.chart_height)
-else:
-    # If tools are hidden, use the saved values
-    chart_width = st.session_state.chart_width
-    chart_height = st.session_state.chart_height
+        new_chart_height = st.slider("Chart Height", min_value=300, max_value=1000, value=chart_height)
+        if new_chart_height != chart_height:
+            set_setting('chart_height', new_chart_height)
+            st.rerun()
 
 # 处理加载逻辑和可视化生成
 if st.session_state.show_loader:
@@ -495,10 +546,6 @@ if st.session_state.show_loader:
     
     st.session_state.show_loader = False
     st.rerun()
-
-# 检查 habits.csv 是否存在并生成图表
-if 'csv_checked' not in st.session_state:
-    st.session_state.csv_checked = os.path.exists('habits.csv')
 
 # Visualization generation
 if st.session_state.data_table is not None or (st.session_state.csv_checked and os.path.exists('habits.csv')):
