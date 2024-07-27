@@ -393,72 +393,43 @@ if st.session_state.show_config_message and visualizer.is_configured:
     st.success("配置已加載")
     st.session_state.show_config_message = False
 
-# Check for habits.csv and show appropriate button
-if os.path.exists('habits.csv'):
-    if st.button("Re-generate Visualization"):
-        clear_progress_and_regenerate()
-else:
-    if not st.session_state.show_loader and visualizer.is_configured:
-        if st.button("Generate Visualization"):
-            st.session_state.show_loader = True
-            st.rerun()
+# 显示/隐藏控制面板的按钮
+show_controls = st.checkbox("显示/隐藏控制面板", value=True)
 
+# 仅在切换状态为 True 时显示控制面板
+if show_controls:
+    # 添加图表类型选择器
+    chart_types = ['bar', 'scatter', 'treemap']
+    selected_chart_type = st.selectbox("Select Chart Type", chart_types)
 
-# Add chart type selector
-chart_types = ['bar', 'scatter', 'treemap']
-selected_chart_type = st.selectbox("Select Chart Type", chart_types)
-
-# 添加方向選擇器（僅適用於條形圖）
-if selected_chart_type == 'bar':
-    orientation = st.radio("Select Orientation", ['horizontal', 'vertical'])
-else:
-    orientation = 'horizontal'  # 默認值，不會用於非條形圖
-
-# 處理加載邏輯和可視化生成
-if st.session_state.show_loader:
-    with st.spinner("正在獲取頁面 ..."):
-        try:
-            df = asyncio.run(visualizer.generate_visualization())
-            if df is not None:
-                st.session_state.data_table = df
-                st.session_state.csv_checked = True
-            else:
-                st.error("数据处理失败，请检查 API 配置和数据。")
-        except Exception as e:
-            st.error(f"生成可视化时发生错误: {e}")
-    
-    st.session_state.show_loader = False
-    st.rerun()
-
-# 檢查 habits.csv 是否存在並生成圖表
-if 'csv_checked' not in st.session_state:
-    st.session_state.csv_checked = os.path.exists('habits.csv')
-
-# 如果數據可用，顯示生成的可視化
-if st.session_state.data_table is not None or (st.session_state.csv_checked and os.path.exists('habits.csv')):
-    if st.session_state.data_table is None:
-        df = pd.read_csv('habits.csv')
+    # 添加方向选择器（仅适用于条形图）
+    if selected_chart_type == 'bar':
+        orientation = st.radio("Select Orientation", ['horizontal', 'vertical'])
     else:
-        df = st.session_state.data_table
-    
-    # 添加滑塊來選擇顯示的項目數量
+        orientation = 'horizontal'  # 默认值，不会用于非条形图
+
+    # 添加显示的项数选择滑块
     num_items = st.slider("Number of items to display", min_value=5, max_value=len(df), value=min(20, len(df)))
-    
-    # 按 Total Minutes 排序數據框並選擇前 n 項
-    df_display = df.sort_values('Total Minutes', ascending=False).head(num_items)
-    
-    # 添加圖表尺寸的滑塊
+
+    # 添加图表尺寸的滑块
     col1, col2 = st.columns(2)
     with col1:
         chart_width = st.slider("Chart Width", min_value=400, max_value=1200, value=700)
     with col2:
         chart_height = st.slider("Chart Height", min_value=300, max_value=1000, value=500)
-    
-    # 創建基於選定類型、方向和尺寸的圖表
-    fig = visualizer.create_chart(df_display, chart_type=selected_chart_type, orientation=orientation, height=chart_height, width=chart_width)
-    
-    # 顯示圖表
-    st.plotly_chart(fig)
+
+    # Re-generate Visualization 按钮
+    if os.path.exists('habits.csv'):
+        if st.button("Re-generate Visualization"):
+            clear_progress_and_regenerate()
+    else:
+        if not st.session_state.show_loader and visualizer.is_configured:
+            if st.button("Generate Visualization"):
+                st.session_state.show_loader = True
+                st.rerun()
+else:
+    # 隐藏所有调节器，只显示图表
+    st.write("控制面板已隐藏。勾选上方的复选框以显示控制面板。")
 
 # 如果可用，顯示數據表
 if st.session_state.data_table is not None:
