@@ -533,38 +533,35 @@ if st.session_state.show_tools:
         if new_chart_height != chart_height:
             set_setting('chart_height', new_chart_height)
             st.session_state.chart_height = new_chart_height
-    
-    # Number of items slider
-    if os.path.exists('data/habits.csv'):
-        df = pd.read_csv('data/habits.csv')
-        max_num_items = len(df)
-    else:
-        max_num_items = 20  # Default max value
 
-    new_num_items = st.slider("Number of items to display", min_value=5, max_value=max_num_items, value=num_items)
-    if new_num_items != num_items:
-        set_setting('num_items', new_num_items)
-        st.session_state.num_items = new_num_items
-        
-        # Update data table display
-        if st.session_state.data_table is not None:
-            st.session_state.data_table = st.session_state.data_table.head(new_num_items)
-
-# 处理加载逻辑和可视化生成
+# 處理加載邏輯和可視化生成
 if st.session_state.data_table is not None or (st.session_state.csv_checked and os.path.exists('data/habits.csv')):
     if st.session_state.data_table is None:
         df = pd.read_csv('data/habits.csv')
     else:
         df = st.session_state.data_table
 
-    # Ensure the number of items displayed matches the slider value
-    df = df.head(st.session_state.num_items)
-
     # Add 'Visible' column if it does not exist
     if 'Visible' not in df.columns:
         df['Visible'] = True
 
-    # Create and display the chart
+    # 獲取可見項目的數量
+    visible_items_count = df['Visible'].sum()
+
+    # 更新 slider 的最大值和當前值
+    max_num_items = len(df)
+    num_items = st.slider("Number of items to display", min_value=1, max_value=max_num_items, value=min(visible_items_count, max_num_items))
+
+    # 更新會話狀態和設置
+    if num_items != st.session_state.num_items:
+        set_setting('num_items', num_items)
+        st.session_state.num_items = num_items
+
+    # 根據 slider 值更新可見性
+    df['Visible'] = False
+    df.iloc[:num_items, df.columns.get_loc('Visible')] = True
+
+    # 創建和顯示圖表
     fig = visualizer.create_chart(
         df[df['Visible']].sort_values('Total Minutes', ascending=False),
         chart_type=st.session_state.selected_chart_type,
@@ -574,18 +571,18 @@ if st.session_state.data_table is not None or (st.session_state.csv_checked and 
     )
     st.plotly_chart(fig, use_container_width=True)
     
-    # Display the editable data table below the chart
+    # 顯示可編輯的數據表
     if st.session_state.show_table:
         st.write("Data Table")
 
-        # Watch for changes in the editable data table
+        # 監視可編輯數據表的變化
         edited_df = st.data_editor(df, key="data_editor_key", use_container_width=True)
 
-        # Sync the data table with the slider value
+        # 同步數據表與 slider 值
         if not df.equals(edited_df):
             st.session_state.data_table = edited_df
-            visible_items = edited_df.loc[edited_df['Visible'], :]
-            num_visible_items = len(visible_items)
-            if st.session_state.num_items != num_visible_items:
-                st.session_state.num_items = num_visible_items
-                set_setting('num_items', num_visible_items)
+            visible_items = edited_df['Visible'].sum()
+            if st.session_state.num_items != visible_items:
+                st.session_state.num_items = visible_items
+                set_setting('num_items', visible_items)
+            st.rerun()
