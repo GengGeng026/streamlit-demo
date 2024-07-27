@@ -405,27 +405,21 @@ st.markdown(custom_css, unsafe_allow_html=True)
 # Initialize visualizer
 visualizer = NotionDataVisualizer()
 
-# Initialize session state
-if 'show_loader' not in st.session_state:
-    st.session_state.show_loader = False
-if 'visualization_fig' not in st.session_state:
-    st.session_state.visualization_fig = None
-if 'data_table' not in st.session_state:
-    st.session_state.data_table = None
-if 'show_config_message' not in st.session_state:
-    st.session_state.show_config_message = False
-if 'is_vertical' not in st.session_state:
-    st.session_state.is_vertical = False
+# Initialize session state variables if they don't exist
 if 'show_tools' not in st.session_state:
-    st.session_state.show_tools = False  # 默认隐藏工具
+    st.session_state.show_tools = False
 if 'show_table' not in st.session_state:
-    st.session_state.show_table = False  # 默认隐藏表格
+    st.session_state.show_table = False
 if 'num_items' not in st.session_state:
-    st.session_state.num_items = 20  # 默认显示的项目数
+    st.session_state.num_items = 20
 if 'selected_chart_type' not in st.session_state:
-    st.session_state.selected_chart_type = 'bar'  # 默认图表类型
+    st.session_state.selected_chart_type = 'bar'
 if 'orientation' not in st.session_state:
-    st.session_state.orientation = 'horizontal'  # 默认方向
+    st.session_state.orientation = 'horizontal'
+if 'chart_width' not in st.session_state:
+    st.session_state.chart_width = 700
+if 'chart_height' not in st.session_state:
+    st.session_state.chart_height = 500
 
 # Show "配置已加载" message if needed
 if st.session_state.show_config_message and visualizer.is_configured:
@@ -446,49 +440,45 @@ with col1:
                 st.rerun()
 
 with col4:
-    # 使用复选框来控制工具的显示状态
     show_tools = st.checkbox("HIDE TOOLS" if st.session_state.show_tools else "TOOLS", value=st.session_state.show_tools)
-
-    # 更新 session state 中的工具显示状态
     if show_tools != st.session_state.show_tools:
         st.session_state.show_tools = show_tools
-        st.rerun()  # 强制重新渲染页面
+        st.rerun()
 
 with col3:
-    # 使用复选框来控制表格的显示状态
     show_table = st.checkbox("TABLE", value=st.session_state.show_table)
-
-    # 更新 session state 中的表格显示状态
     if show_table != st.session_state.show_table:
         st.session_state.show_table = show_table
-        st.rerun()  # 强制重新渲染页面
+        st.rerun()
 
-# 定义 num_items、selected_chart_type 和 orientation，确保它们在任何情况下都被定义
+
+# Tools section
 if st.session_state.show_tools:
-    # Add chart type selector
+    # Chart type selector
     chart_types = ['bar', 'scatter', 'treemap']
-    st.session_state.selected_chart_type = st.selectbox("Select Chart Type", chart_types)
+    st.session_state.selected_chart_type = st.selectbox("Select Chart Type", chart_types, index=chart_types.index(st.session_state.selected_chart_type))
 
-    # 添加方向选择器（仅适用于条形图）
+    # Orientation selector (only for bar charts)
     if st.session_state.selected_chart_type == 'bar':
-        st.session_state.orientation = st.radio("Select Orientation", ['horizontal', 'vertical'])
+        orientations = ['horizontal', 'vertical']
+        st.session_state.orientation = st.radio("Select Orientation", orientations, index=orientations.index(st.session_state.orientation))
     else:
-        st.session_state.orientation = 'horizontal'  # 默认值，不会用于非条形图
+        st.session_state.orientation = 'horizontal'
 
-    # 添加滑块来选择显示的项目数量
+    # Number of items slider
     df = st.session_state.data_table if st.session_state.data_table is not None else pd.read_csv('habits.csv') if os.path.exists('habits.csv') else pd.DataFrame()
     st.session_state.num_items = st.slider("Number of items to display", min_value=5, max_value=len(df) if len(df) > 0 else 20, value=st.session_state.num_items)
 
-    # 添加图表尺寸的滑块
+    # Chart size sliders
     col1, col2 = st.columns(2)
     with col1:
-        chart_width = st.slider("Chart Width", min_value=400, max_value=1200, value=700)
+        st.session_state.chart_width = st.slider("Chart Width", min_value=400, max_value=1200, value=st.session_state.chart_width)
     with col2:
-        chart_height = st.slider("Chart Height", min_value=300, max_value=1000, value=500)
+        st.session_state.chart_height = st.slider("Chart Height", min_value=300, max_value=1000, value=st.session_state.chart_height)
 else:
-    # 如果工具被隐藏，设置默认值
-    chart_width = 700
-    chart_height = 500
+    # If tools are hidden, use the saved values
+    chart_width = st.session_state.chart_width
+    chart_height = st.session_state.chart_height
 
 # 处理加载逻辑和可视化生成
 if st.session_state.show_loader:
@@ -510,20 +500,26 @@ if st.session_state.show_loader:
 if 'csv_checked' not in st.session_state:
     st.session_state.csv_checked = os.path.exists('habits.csv')
 
-# 如果数据可用，显示生成的可视化
+# Visualization generation
 if st.session_state.data_table is not None or (st.session_state.csv_checked and os.path.exists('habits.csv')):
     if st.session_state.data_table is None:
         df = pd.read_csv('habits.csv')
     else:
         df = st.session_state.data_table
     
-    # 按 Total Minutes 排序数据框并选择前 n 项
+    # Sort and select top n items
     df_display = df.sort_values('Total Minutes', ascending=False).head(st.session_state.num_items)
     
-    # 创建基于选定类型、方向和尺寸的图表
-    fig = visualizer.create_chart(df_display, chart_type=st.session_state.selected_chart_type, orientation=st.session_state.orientation, height=chart_height, width=chart_width)
+    # Create chart based on saved settings
+    fig = visualizer.create_chart(
+        df_display, 
+        chart_type=st.session_state.selected_chart_type, 
+        orientation=st.session_state.orientation, 
+        height=st.session_state.chart_height, 
+        width=st.session_state.chart_width
+    )
     
-    # 显示图表
+    # Display chart
     st.plotly_chart(fig)
 
 # 如果可用且选中，显示数据表
