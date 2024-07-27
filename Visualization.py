@@ -310,14 +310,14 @@ class NotionDataVisualizer:
         # Update layout to center the title, set font size, and adjust padding
         fig.update_layout(
             title={
-                'text': 'MyHabits',
+                'text': 'My Habits',
                 'x': 0.5,  # Center the title horizontally
                 'xanchor': 'center',  # Anchor the title in the center horizontally
                 'yanchor': 'top',  # Anchor the title to the top vertically
                 'font': {
                     'size': 30,  # Font size of the title
                     'family': 'Arial',  # Font family of the title
-                    'color': 'black'  # Font color of the title
+                    'color': 'White'  # Font color of the title
                 },
                 'pad': {
                     't': 100  # Padding above the title (distance from the chart)
