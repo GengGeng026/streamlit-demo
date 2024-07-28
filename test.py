@@ -1,3 +1,10 @@
+# https://www.kaggle.com/code/subinium/storytelling-with-data-netflix-ver/notebook
+# https://ipyvizzu.vizzuhq.com/latest/examples/presets
+import pandas as pd
+from ipyvizzu import Chart, Data, Config, Style
+from streamlit.components.v1 import html
+import numpy as np
+from collections import Counter
 import json
 import os
 import asyncio
@@ -9,6 +16,16 @@ from streamlit_vizzu import Config, Data, VizzuChart
 import random
 import logging
 from typing import List, Dict, Tuple
+import plotly.express as px
+import plotly.graph_objects as go
+from functools import lru_cache
+from streamlit_elements import mui, dashboard, elements, html, sync, lazy
+
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+# File to store settings
+SETTINGS_FILE = 'chart_settings.json'
+PROGRESS_FILE = 'progress.json'
 
 # Constants
 TASK_NOTION_NAME = 'Name'
@@ -33,12 +50,8 @@ data = {
             "direction": "descending"
         }
     ],
-    "page_size": 5  # 设置每页返回记录数为 5
+    "page_size": 5
 }
-
-logging.basicConfig(level=logging.INFO, format='%(message)s')
-
-PROGRESS_FILE = 'progress.json'
 
 # Function to validate Notion API Token
 def is_valid_token(token):
@@ -96,18 +109,30 @@ def save_progress(progress):
     with open(PROGRESS_FILE, 'w') as file:
         json.dump(progress, file)
 
+def clear_progress_and_regenerate():
+    if os.path.exists(PROGRESS_FILE):
+        os.remove(PROGRESS_FILE)
+    
+    st.session_state.show_loader = True
+    st.session_state.csv_checked = False
+    st.session_state.visualization_fig = None
+    st.session_state.data_table = None
+
+    st.rerun()
+
+
 class NotionDataVisualizer:
     def __init__(self):
         load_dotenv()
         self.token = os.getenv("NOTION_API_KEY")
-        self.database_id = os.getenv("NOTION_HABITS_DATABASE_ID")
+        self.database_id = os.getenv("NOTION_DATABASE_ID")
         self.proxy_url = os.getenv("PROXY_URL")
 
         self.is_configured = self.token and self.database_id
 
         if not self.is_configured:
-            self.token = st.text_input("请输入Notion API Token:", key='token', placeholder='请输入有效的 API Token', help="确保 Token 长度符合要求")
-            self.database_id = st.text_input("请输入Notion数据库ID:", key='database_id', placeholder='请输入有效的数据库 ID', help="确保数据库 ID 长度符合要求")
+            self.token = st.text_input("請輸入Notion API Token:", key='token', placeholder='請輸入有效的 API Token', help="確保 Token 長度符合要求")
+            self.database_id = st.text_input("請輸入Notion數據庫ID:", key='database_id', placeholder='請輸入有效的數據庫 ID', help="確保數據庫 ID 長度符合要求")
             self.show_save_button()
         else:
             if 'configuration_loaded' not in st.session_state:
@@ -120,7 +145,7 @@ class NotionDataVisualizer:
         if self.token and self.database_id:
             with open('.env', 'w') as f:
                 f.write(f"NOTION_API_KEY={self.token}\n")
-                f.write(f"NOTION_HABITS_DATABASE_ID={self.database_id}\n")
+                f.write(f"NOTION_DATABASE_ID={self.database_id}\n")
             st.success("配置已保存到 .env 文件中")
             self.is_configured = True
             st.session_state.configuration_loaded = False
@@ -132,7 +157,7 @@ class NotionDataVisualizer:
             if st.button("保存配置"):
                 self.save_config()
         else:
-            st.warning("请确保输入的 Notion API Token 和数据库 ID 符合格式要求。")
+            st.warning("請確保輸入的 Notion API Token 和數據庫 ID 符合格式要求。")
 
     data = {
         "filter": {
@@ -157,7 +182,6 @@ class NotionDataVisualizer:
         if query_params is None:
             query_params = {}
         
-        # 添加 filter 和 sort 到 query_params
         query_params.update(data)
         
         try:
@@ -189,7 +213,7 @@ class NotionDataVisualizer:
             queried_page_ids = set(queried_page_ids or [])
 
             while has_more:
-                page_size = 5  # 设置每页返回记录数为 5
+                page_size = 5
 
                 query_params = {"page_size": page_size}
                 if start_cursor:
@@ -217,7 +241,6 @@ class NotionDataVisualizer:
                         has_more = response.get('has_more', False)
                         start_cursor = response.get('next_cursor')
 
-                        # Extract Page Name titles
                         page_names = [page['properties']['Name']['title'][0]['plain_text'] for page in new_results if 'properties' in page and 'Name' in page['properties'] and 'title' in page['properties']['Name']]
                         
                         logging.info(f"Current page count: {page_count}")
@@ -226,14 +249,13 @@ class NotionDataVisualizer:
                         else:
                             logging.info("No more pages to retrieve.")
 
-                        # Save progress after each batch
                         save_progress({
                             'start_cursor': start_cursor, 
                             'total_retrieved': page_count,
                             'queried_page_ids': list(queried_page_ids)
                         })
 
-                        await asyncio.sleep(1)  # 调整请求之间的延时
+                        await asyncio.sleep(1)
                     else:
                         has_more = False
 
@@ -251,7 +273,7 @@ class NotionDataVisualizer:
             return page_data['properties'][TASK_NOTION_NAME]['title'][0]['plain_text']
         else:
             return "Unknown"
-        
+            
     async def process_data(self, data):
         categories = {}
         async with aiohttp.ClientSession() as session:
@@ -264,9 +286,7 @@ class NotionDataVisualizer:
                     parent_id = parent['relation'][0]['id']
                     tasks.append(self.get_page_name(session, parent_id))
                 else:
-                    if 'No Parent' not in categories:
-                        categories['No Parent'] = 0
-                    categories['No Parent'] += total_mins
+                    categories[result['properties']['Name']['title'][0]['plain_text']] = total_mins
 
             parent_names = await asyncio.gather(*tasks)
             for parent_name in parent_names:
@@ -277,13 +297,21 @@ class NotionDataVisualizer:
         sorted_categories = sorted(categories.items(), key=lambda x: x[1], reverse=True)
         df = pd.DataFrame(sorted_categories, columns=["Category", "Total Minutes"])
         return df
+    
+    def create_chart(self, df, chart_type='bar', orientation='horizontal', height=450, width=1080):
+        data = Data()
+        data.add_df(df)
+
+        chart = VizzuChart(width=width, height=height)
+        chart.animate(data)
+
+        return chart, data
 
 
     async def generate_visualization(self):
-        progress = load_progress()
-        start_cursor = progress.get('start_cursor')
-        total_retrieved = progress.get('total_retrieved', 0)
-        queried_page_ids = set(progress.get('queried_page_ids', []))
+        start_cursor = None
+        total_retrieved = 0
+        queried_page_ids = set()
 
         all_results = []
         page_limit = 600
@@ -306,9 +334,8 @@ class NotionDataVisualizer:
 
             if total_retrieved >= 400 and total_retrieved < page_limit:
                 logging.info("Reached 400 pages. Continuing to retrieve up to 600 pages.")
-                await asyncio.sleep(30)  # Wait for 30 seconds before continuing
+                await asyncio.sleep(30)
 
-            # Save progress after each batch
             save_progress({
                 'start_cursor': start_cursor, 
                 'total_retrieved': total_retrieved,
@@ -321,25 +348,32 @@ class NotionDataVisualizer:
 
         logging.info(f"Finished retrieving data. Total pages: {total_retrieved}")
 
-        # Process data and generate visualization
         df = await self.process_data({'results': all_results})
-        
-        # Generate CSV file
-        df.to_csv('habits.csv', index=False)
-        logging.info("Generated habits.csv file")
 
-        chart = VizzuChart(height=360, width=480)
-        data = Data()
-        data.add_df(df)
+        # Ensure the 'Data' directory exists
+        data_dir = 'data'
+        if not os.path.exists(data_dir):
+            os.makedirs(data_dir)
+            logging.info(f"Created directory: {data_dir}")
 
-        chart.animate(data)
-        config = Config({"x": "Total Minutes", "y": "Category", "label": "Total Minutes", "title": "Category vs Total Minutes"})
-        chart.animate(config)
+        # Save the CSV file in the 'Data' directory
+        csv_path = os.path.join(data_dir, 'habits.csv')
+        df.to_csv(csv_path, index=False)
+        logging.info(f"Generated {csv_path} file")
 
-        return chart, df
 
-# Streamlit app
-st.title("Notion Data Visualization")
+# # Custom CSS for centering the title
+# custom_css = """
+# <style>
+# h1 {
+#     text-align: left;
+# }
+# </style>
+# """
+# st.markdown(custom_css, unsafe_allow_html=True)
+
+# # Main title
+# st.markdown("<h1>DASH</h1>", unsafe_allow_html=True)
 
 # Custom CSS for input field color change
 custom_css = """
@@ -357,48 +391,241 @@ st.markdown(custom_css, unsafe_allow_html=True)
 # Initialize visualizer
 visualizer = NotionDataVisualizer()
 
+@lru_cache(maxsize=1)
+def load_settings():
+    if os.path.exists(SETTINGS_FILE):
+        with open(SETTINGS_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+def save_settings(settings):
+    with open(SETTINGS_FILE, 'w') as f:
+        json.dump(settings, f)
+
+def get_setting(key, default_value):
+    if key not in st.session_state:
+        saved_settings = load_settings()
+        st.session_state[key] = saved_settings.get(key, default_value) if saved_settings else default_value
+    return st.session_state[key]
+
+def set_setting(key, value):
+    if st.session_state.get(key) != value:
+        st.session_state[key] = value
+        save_settings({k: v for k, v in st.session_state.items() if not k.startswith('_') and not isinstance(v, pd.DataFrame)})
+
+# Initialize settings
+show_tools = get_setting('show_tools', False)
+show_table = get_setting('show_table', False)
+num_items = get_setting('num_items', 20)
+selected_chart_type = get_setting('selected_chart_type', 'bar')
+orientation = get_setting('orientation', 'vertical')
+chart_width = get_setting('chart_width', 700)
+chart_height = get_setting('chart_height', 500)
+
 # Initialize session state
 if 'show_loader' not in st.session_state:
     st.session_state.show_loader = False
-if 'visualization_fig' not in st.session_state:
-    st.session_state.visualization_fig = None
 if 'data_table' not in st.session_state:
     st.session_state.data_table = None
 if 'show_config_message' not in st.session_state:
     st.session_state.show_config_message = False
+if 'show_tools' not in st.session_state:
+    st.session_state.show_tools = False
+if 'show_table' not in st.session_state:
+    st.session_state.show_table = False
+if 'num_items' not in st.session_state:
+    st.session_state.num_items = 20
+if 'selected_chart_type' not in st.session_state:
+    st.session_state.selected_chart_type = 'bar'
+if 'orientation' not in st.session_state:
+    st.session_state.orientation = 'vertical'
+if 'csv_checked' not in st.session_state:
+    st.session_state.csv_checked = True
 
 # Show "配置已加载" message if needed
 if st.session_state.show_config_message and visualizer.is_configured:
     st.success("配置已加载")
     st.session_state.show_config_message = False
 
-# Show "Generate Visualization" button only if not loading
-if not st.session_state.show_loader and visualizer.is_configured:
-    if st.button("Generate Visualization"):
-        st.session_state.show_loader = True
-        st.rerun()
+# Create a row for the checkbox and buttons
+col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
 
-# Handle loader logic and visualization generation
-if st.session_state.show_loader:
-    with st.spinner("正在生成可视化..."):
-        try:
-            chart, df = asyncio.run(visualizer.generate_visualization())
-            if chart:
-                st.session_state.visualization_fig = chart
-                st.session_state.data_table = df
-            else:
-                st.error("数据处理失败，请检查 API 配置和数据。")
-        except Exception as e:
-            st.error(f"生成可视化时发生错误: {e}")
+with col1:
+    if os.path.exists('data/habits.csv'):
+        if st.button("Re-FETCH", key="re_fetch", help="重新获取数据"):
+            clear_progress_and_regenerate()
+    else:
+        if not st.session_state.show_loader and visualizer.is_configured:
+            if st.button("FETCH Notion Data", key="generate", help="生成可视化"):
+                st.session_state.show_loader = True
+                # Perform async task without st.rerun()
+                df = asyncio.run(visualizer.generate_visualization())
+                if df is not None:
+                    st.session_state.data_table = df
+                    st.session_state.csv_checked = True
+                else:
+                    st.error("数据处理失败，请检查 API 配置和数据。")
+                st.session_state.show_loader = False
+
+with col4:
+    new_show_tools = st.checkbox("TOOLS", value=show_tools)
+    if new_show_tools != show_tools:
+        st.session_state.show_tools = new_show_tools
+        st.rerun()  # 强制刷新页面
+
+with col3:
+    new_show_table = st.checkbox("TABLE", value=show_table)
+    if new_show_table != show_table:
+        st.session_state.show_table = new_show_table
+        st.rerun()  # 强制刷新页面
+
+# Show tools if the checkbox is checked
+if st.session_state.show_tools:
+    col1, col2 = st.columns(2)
     
-    st.session_state.show_loader = False
-    st.rerun()
+    with col1:
+        # Dropdown menu for chart type
+        chart_options = ["bar", "scatter", "treemap"]
+        selected_chart_type = st.selectbox(
+            "Select Chart Type",
+            options=chart_options,
+            index=chart_options.index(st.session_state.selected_chart_type)
+        )
+        if selected_chart_type != st.session_state.selected_chart_type:
+            st.session_state.selected_chart_type = selected_chart_type
+            st.session_state.orientation = "vertical"  # Reset orientation when changing chart type
+        
+        # Show orientation option if bar chart is selected
+        if selected_chart_type == "bar":
+            orientation_options = ["vertical", "horizontal"]
+            orientation = st.radio(
+                "Select Bar Chart Orientation",
+                options=orientation_options,
+                index=orientation_options.index(st.session_state.orientation)
+            )
+            if orientation != st.session_state.orientation:
+                st.session_state.orientation = orientation
+    
+    with col2:
+        new_chart_width = st.slider("Chart Width", min_value=400, max_value=1200, value=chart_width)
+        if new_chart_width != chart_width:
+            st.session_state.chart_width = new_chart_width
+    
+    with col2:
+        new_chart_height = st.slider("Chart Height", min_value=300, max_value=1000, value=chart_height)
+        if new_chart_height != chart_height:
+            st.session_state.chart_height = new_chart_height
 
-# Display the generated visualization if available
-if st.session_state.visualization_fig:
-    st.session_state.visualization_fig.show()
+# 處理加載邏輯和可視化生成
+if st.session_state.data_table is not None or (st.session_state.csv_checked and os.path.exists('data/habits.csv')):
+    if st.session_state.data_table is None:
+        df = pd.read_csv('data/habits.csv')
+    else:
+        df = st.session_state.data_table
 
-# Display the data table if available
-if st.session_state.data_table is not None:
-    st.caption("Data shown on the chart")
-    st.dataframe(st.session_state.data_table)
+    # Add 'Visible' column if it does not exist
+    if 'Visible' not in df.columns:
+        df['Visible'] = True
+
+    # 獲取可見項目的數量
+    visible_items_count = df['Visible'].sum()
+
+    # 根據 slider 值更新可見性
+    df['Visible'] = False
+    df.iloc[:num_items, df.columns.get_loc('Visible')] = True
+
+    # 創建和顯示圖表
+    chart, data = visualizer.create_chart(
+        df[df['Visible']].sort_values('Total Minutes', ascending=False),
+        chart_type=st.session_state.selected_chart_type,
+        orientation=st.session_state.orientation,
+        height=st.session_state.chart_height,
+        width=st.session_state.chart_width
+    )
+
+    # Animate the chart based on selected chart type and orientation
+    if st.session_state.selected_chart_type == 'bar':
+        if st.session_state.orientation == 'horizontal':
+            chart.animate(
+                Config({
+                    "channels": {
+                        "x": {"set": ["Total Minutes"]},
+                        "y": {"set": ["Category"]},
+                        "color": {"set": ["Category"]},
+                        "label": {"set": ["Total Minutes"]}
+                    },
+                    "title": "My Habits (Horizontal Bar Chart)",
+                    "geometry": "rectangle"
+                })
+            )
+        else:
+            chart.animate(
+                Config({
+                    "channels": {
+                        "x": {"set": ["Category"]},
+                        "y": {"set": ["Total Minutes"]},
+                        "color": {"set": ["Category"]},
+                        "label": {"set": ["Total Minutes"]}
+                    },
+                    "title": "My Habits (Vertical Bar Chart)",
+                    "geometry": "rectangle"
+                })
+            )
+    elif st.session_state.selected_chart_type == 'scatter':
+        chart.animate(
+            Config({
+                "channels": {
+                    "x": {"set": ["Total Minutes"]},
+                    "y": {"set": ["Category"]},
+                    "color": {"set": ["Category"]},
+                    "size": {"set": ["Total Minutes"]},
+                    "label": {"set": ["Total Minutes"]}
+                },
+                "title": "My Habits (Scatter Plot)",
+                "geometry": "circle"
+            })
+        )
+    elif st.session_state.selected_chart_type == 'treemap':
+        chart.animate(
+            Config({
+                "channels": {
+                    "size": {"set": ["Total Minutes"]},
+                    "color": {"set": ["Category"]},
+                    "label": {"set": ["Category", "Total Minutes"]}
+                },
+                "title": "My Habits (Treemap)",
+                "geometry": "rectangle"
+            })
+        )
+
+    # Display the chart
+    chart.show()
+    
+    # 使用 CSS 樣式來控制距離
+    st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
+
+    # 更新 slider 的最大值和當前值
+    max_num_items = len(df)
+    num_items = st.slider("Number of items to display", min_value=1, max_value=max_num_items, value=min(visible_items_count, max_num_items))
+
+    # 更新會話狀態和設置
+    if num_items != st.session_state.num_items:
+        st.session_state.num_items = num_items
+    
+    # 使用 CSS 樣式來控制距離
+    st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
+
+    # 顯示可編輯的數據表
+    if st.session_state.show_table:
+        st.write("Data Table")
+
+        # 監視可編輯數據表的變化
+        edited_df = st.data_editor(df, key="data_editor_key", use_container_width=True)
+
+        # 同步數據表與 slider 值
+        if not df.equals(edited_df):
+            st.session_state.data_table = edited_df
+            visible_items = edited_df['Visible'].sum()
+            if st.session_state.num_items != visible_items:
+                st.session_state.num_items = visible_items
+            st.rerun()  # 强制刷新页面

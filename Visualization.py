@@ -290,7 +290,7 @@ class NotionDataVisualizer:
         sorted_categories = sorted(categories.items(), key=lambda x: x[1], reverse=True)
         df = pd.DataFrame(sorted_categories, columns=["Category", "Total Minutes"])
         return df
-
+    
     def create_chart(self, df, chart_type='bar', orientation='horizontal', height=450, width=1080):
         if chart_type == 'bar':
             if orientation == 'horizontal':
@@ -306,6 +306,7 @@ class NotionDataVisualizer:
             title={
                 'text': 'My Habits',
                 'x': 0.5,
+                'y': 0.95,  # 控制标题位置，使其靠近图的上边缘
                 'xanchor': 'center',
                 'yanchor': 'top',
                 'font': {
@@ -314,13 +315,14 @@ class NotionDataVisualizer:
                     'color': 'White'
                 },
                 'pad': {
-                    't': 100
+                    't': 10  # 减少标题内部填充
                 }
             },
-            margin=dict(t=100, l=0, r=0, b=0)
+            margin=dict(t=120, l=0, r=0, b=0)  # 增加上边距，确保标题在图的外面
         )
 
         return fig
+
 
     async def generate_visualization(self):
         start_cursor = None
@@ -470,7 +472,7 @@ with col1:
             clear_progress_and_regenerate()
     else:
         if not st.session_state.show_loader and visualizer.is_configured:
-            if st.button("Generate Visualization", key="generate", help="生成可视化"):
+            if st.button("FETCH Notion Data", key="generate", help="生成可视化"):
                 st.session_state.show_loader = True
                 # Perform async task without st.rerun()
                 df = asyncio.run(visualizer.generate_visualization())
@@ -482,16 +484,16 @@ with col1:
                 st.session_state.show_loader = False
 
 with col4:
-    new_show_tools = st.checkbox("HIDE TOOLS" if show_tools else "TOOLS", value=show_tools)
+    new_show_tools = st.checkbox("TOOLS", value=show_tools)
     if new_show_tools != show_tools:
-        set_setting('show_tools', new_show_tools)
         st.session_state.show_tools = new_show_tools
+        st.rerun()  # 强制刷新页面
 
 with col3:
     new_show_table = st.checkbox("TABLE", value=show_table)
     if new_show_table != show_table:
-        set_setting('show_table', new_show_table)
         st.session_state.show_table = new_show_table
+        st.rerun()  # 强制刷新页面
 
 # Show tools if the checkbox is checked
 if st.session_state.show_tools:
@@ -506,7 +508,6 @@ if st.session_state.show_tools:
             index=chart_options.index(st.session_state.selected_chart_type)
         )
         if selected_chart_type != st.session_state.selected_chart_type:
-            set_setting('selected_chart_type', selected_chart_type)
             st.session_state.selected_chart_type = selected_chart_type
             st.session_state.orientation = "vertical"  # Reset orientation when changing chart type
         
@@ -519,19 +520,16 @@ if st.session_state.show_tools:
                 index=orientation_options.index(st.session_state.orientation)
             )
             if orientation != st.session_state.orientation:
-                set_setting('orientation', orientation)
                 st.session_state.orientation = orientation
     
     with col2:
         new_chart_width = st.slider("Chart Width", min_value=400, max_value=1200, value=chart_width)
         if new_chart_width != chart_width:
-            set_setting('chart_width', new_chart_width)
             st.session_state.chart_width = new_chart_width
     
     with col2:
         new_chart_height = st.slider("Chart Height", min_value=300, max_value=1000, value=chart_height)
         if new_chart_height != chart_height:
-            set_setting('chart_height', new_chart_height)
             st.session_state.chart_height = new_chart_height
 
 # 處理加載邏輯和可視化生成
@@ -548,15 +546,6 @@ if st.session_state.data_table is not None or (st.session_state.csv_checked and 
     # 獲取可見項目的數量
     visible_items_count = df['Visible'].sum()
 
-    # 更新 slider 的最大值和當前值
-    max_num_items = len(df)
-    num_items = st.slider("Number of items to display", min_value=1, max_value=max_num_items, value=min(visible_items_count, max_num_items))
-
-    # 更新會話狀態和設置
-    if num_items != st.session_state.num_items:
-        set_setting('num_items', num_items)
-        st.session_state.num_items = num_items
-
     # 根據 slider 值更新可見性
     df['Visible'] = False
     df.iloc[:num_items, df.columns.get_loc('Visible')] = True
@@ -571,6 +560,20 @@ if st.session_state.data_table is not None or (st.session_state.csv_checked and 
     )
     st.plotly_chart(fig, use_container_width=True)
     
+    # 使用 CSS 樣式來控制距離
+    st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
+
+    # 更新 slider 的最大值和當前值
+    max_num_items = len(df)
+    num_items = st.slider("Number of items to display", min_value=1, max_value=max_num_items, value=min(visible_items_count, max_num_items))
+
+    # 更新會話狀態和設置
+    if num_items != st.session_state.num_items:
+        st.session_state.num_items = num_items
+    
+    # 使用 CSS 樣式來控制距離
+    st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
+
     # 顯示可編輯的數據表
     if st.session_state.show_table:
         st.write("Data Table")
@@ -584,5 +587,4 @@ if st.session_state.data_table is not None or (st.session_state.csv_checked and 
             visible_items = edited_df['Visible'].sum()
             if st.session_state.num_items != visible_items:
                 st.session_state.num_items = visible_items
-                set_setting('num_items', visible_items)
-            st.rerun()
+            st.rerun()  # 强制刷新页面

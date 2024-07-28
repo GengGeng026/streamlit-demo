@@ -1,0 +1,170 @@
+Metadata-Version: 2.1
+Name: ipyvizzu-story
+Version: 0.11.0
+Summary: Build, present and share animated data stories in Jupyter Notebook and similar environments.
+Keywords: python,template,notebook,interactive,presentation,data-visualization,charting,datastory,datastorytelling
+Author-Email: "Vizzu Inc." <hello@vizzuhq.com>
+License: Apache-2.0
+Classifier: Environment :: Console
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Project-URL: Homepage, https://ipyvizzu-story.vizzuhq.com
+Project-URL: Documentation, https://ipyvizzu-story.vizzuhq.com
+Project-URL: Source, https://github.com/vizzuhq/ipyvizzu-story
+Project-URL: Tracker, https://github.com/vizzuhq/ipyvizzu-story/issues
+Requires-Python: >=3.6
+Requires-Dist: ipyvizzu<1.0.0
+Requires-Dist: IPython; extra == "jupyter"
+Requires-Dist: streamlit; extra == "streamlit"
+Requires-Dist: panel; extra == "panel"
+Provides-Extra: jupyter
+Provides-Extra: streamlit
+Provides-Extra: panel
+Description-Content-Type: text/markdown
+
+<p align="center">
+  <a href="https://ipyvizzu-story.vizzuhq.com/0.11/">
+    <img src="https://ipyvizzu-story.vizzuhq.com/0.11/assets/ipyvizzu-story.gif" alt="ipyvizzu-story" />
+  </a>
+  <p align="center"><b>ipyvizzu-story</b> - Build, present and share animated data stories in Jupyter Notebook and similar environments</p>
+  <p align="center">
+    <a href="https://ipyvizzu-story.vizzuhq.com/0.11/">Documentation</a>
+    · <a href="https://ipyvizzu-story.vizzuhq.com/0.11/examples/">Examples</a>
+    · <a href="https://ipyvizzu-story.vizzuhq.com/0.11/reference/ipyvizzustory/">Code reference</a>
+    · <a href="https://github.com/vizzuhq/ipyvizzu-story">Repository</a>
+    · <a href="https://blog.vizzuhq.com">Blog</a>
+  </p>
+</p>
+
+[![PyPI version](https://badge.fury.io/py/ipyvizzu-story.svg)](https://badge.fury.io/py/ipyvizzu-story)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/ipyvizzu-story.svg)](https://anaconda.org/conda-forge/ipyvizzu-story)
+[![CI-CD](https://github.com/vizzuhq/ipyvizzu-story/actions/workflows/cicd.yml/badge.svg?branch=main)](https://github.com/vizzuhq/ipyvizzu-story/actions/workflows/cicd.yml)
+
+# ipyvizzu-story
+
+## About The Extension
+
+`ipyvizzu-story` is an extension of the animated charting tool
+[ipyvizzu](https://github.com/vizzuhq/ipyvizzu) that enables users to create and
+present interactive data presentations within the data science notebook of their
+choice and to share them as an `HTML` file. The extension provides a widget that
+contains the presentation and adds controls for navigating between slides -
+predefined stages within the story being presented. Navigation also works with
+keyboard shortcuts - arrow keys, `PgUp`, `PgDn`, `Home`, `End` - and you can
+also use a clicker to switch between the slides.
+
+## Installation
+
+```sh
+pip install ipyvizzu-story
+```
+
+Visit
+[Installation chapter](https://ipyvizzu-story.vizzuhq.com/0.11/installation)
+for more options and details.
+
+## Usage
+
+You can check and download the code behind the animation on the top of the page
+in our
+[Example gallery](https://ipyvizzu-story.vizzuhq.com/0.11/examples/usbudget/).
+
+You can create the story below with the following code snippet.
+
+<p align="center">
+  <img src="https://ipyvizzu-story.vizzuhq.com/0.11/assets/readme-example.gif" alt="ipyvizzu-story" />
+</p>
+
+```python
+from ipyvizzu import Data, Config
+from ipyvizzustory import Story, Slide, Step
+
+data = Data()
+data.add_series("Foo", ["Alice", "Bob", "Ted"])
+data.add_series("Bar", [15, 32, 12])
+data.add_series("Baz", [5, 3, 2])
+
+story = Story(data=data)
+
+slide1 = Slide(
+    Step(
+        Config({"x": "Foo", "y": "Bar"}),
+    )
+)
+story.add_slide(slide1)
+
+slide2 = Slide(
+    Step(
+        Config({"color": "Foo", "x": "Baz", "geometry": "circle"}),
+    )
+)
+story.add_slide(slide2)
+
+story.play()
+```
+
+## Documentation
+
+Visit our [Documentation site](https://ipyvizzu-story.vizzuhq.com/0.11/) for
+more details and a step-by-step tutorial into `ipyvizzu-story` or check out our
+[Example gallery](https://ipyvizzu-story.vizzuhq.com/0.11/examples/).
+
+## Environments
+
+`ipyvizzu-story` can be used in a wide variety of environments, visit
+[Environments chapter](https://ipyvizzu-story.vizzuhq.com/0.11/environments/)
+for more details.
+
+- Notebooks
+  - [Jupyter Notebook](https://ipyvizzu-story.vizzuhq.com/0.11/environments/notebook/jupyternotebook/)
+  - [Colab](https://ipyvizzu-story.vizzuhq.com/0.11/environments/notebook/colab/)
+  - [Databricks](https://ipyvizzu-story.vizzuhq.com/0.11/environments/notebook/databricks/)
+  - [DataCamp](https://ipyvizzu-story.vizzuhq.com/0.11/environments/notebook/datacamp/)
+  - [Deepnote](https://ipyvizzu-story.vizzuhq.com/0.11/environments/notebook/deepnote/)
+  - [JupyterLab](https://ipyvizzu-story.vizzuhq.com/0.11/environments/notebook/jupyterlab/)
+  - [JupyterLite](https://ipyvizzu-story.vizzuhq.com/0.11/environments/notebook/jupyterlite/)
+  - [Kaggle](https://ipyvizzu-story.vizzuhq.com/0.11/environments/notebook/kaggle/)
+  - [Noteable](https://ipyvizzu-story.vizzuhq.com/0.11/environments/notebook/noteable/)
+- App platforms
+  - [Streamlit](https://ipyvizzu-story.vizzuhq.com/0.11/environments/platform/streamlit/)
+  - [Flask](https://ipyvizzu-story.vizzuhq.com/0.11/environments/platform/flask/)
+  - [Panel](https://ipyvizzu-story.vizzuhq.com/0.11/environments/platform/panel/)
+  - [Mercury](https://ipyvizzu-story.vizzuhq.com/0.11/environments/platform/mercury/)
+  - [Voilà](https://ipyvizzu-story.vizzuhq.com/0.11/environments/platform/voila/)
+- BI tools
+  - [Mode](https://ipyvizzu-story.vizzuhq.com/0.11/environments/bi/mode/)
+- IDEs
+  - [PyCharm](https://ipyvizzu-story.vizzuhq.com/0.11/environments/ide/pycharm/)
+  - [VSCode Python](https://ipyvizzu-story.vizzuhq.com/0.11/environments/ide/vscode/)
+- [Python](https://ipyvizzu-story.vizzuhq.com/0.11/environments/python/)
+
+## Contributing
+
+We welcome contributions to the project, visit our
+[Contributing guide](https://ipyvizzu-story.vizzuhq.com/0.11/CONTRIBUTING) for
+further info.
+
+## Contact
+
+- Join our Slack if you have any questions or comments:
+  [vizzu-community.slack.com](https://join.slack.com/t/vizzu-community/shared_invite/zt-w2nqhq44-2CCWL4o7qn2Ns1EFSf9kEg)
+- Drop us a line at hello@vizzuhq.com
+- Follow us on Twitter: [VizzuHQ](https://twitter.com/VizzuHQ)
+
+## Usage Statistics
+
+`ipyvizzu-story` collects aggregate usage statistics by default to follow the
+progress and overall trends of our library. This feature is optional, and users
+can choose to opt-out. However, we do not track, collect, or store any personal
+data or personally identifiable information. Please note that even when this
+feature is enabled, publishing anything made with `ipyvizzu-story` remains GDPR
+compatible. For more details, please visit
+[Analytics chapter](https://ipyvizzu-story.vizzuhq.com/0.11/tutorial/initialization/#analytics).
+
+## License
+
+Copyright © 2022-2023 [Vizzu Inc](https://vizzuhq.com).
+
+Released under the
+[Apache 2.0 License](https://ipyvizzu-story.vizzuhq.com/0.11/LICENSE).

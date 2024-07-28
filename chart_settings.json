@@ -1,1 +1,1 @@
-{"csv_checked": true, "show_config_message": false, "re_fetch": false, "num_items": 6, "show_table": true, "show_tools": true, "selected_chart_type": "bar", "chart_height": 381, "orientation": "horizontal", "configuration_loaded": true, "data_editor_key": {"edited_rows": {}, "added_rows": [], "deleted_rows": []}, "show_loader": false, "chart_width": 1147}
+{"chart_type": "bar", "orientation": "horizontal", "num_items": 9, "chart_width": 1200, "chart_height": 426, "show_table": true}
