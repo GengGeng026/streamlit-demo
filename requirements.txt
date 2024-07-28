@@ -95,5 +95,4 @@ watchdog==4.0.1
 wcwidth==0.2.13
 webencodings==0.5.1
 yarl==1.9.4
-streamlit-elements==0.2.0
 streamlit-elements==0.1.0
