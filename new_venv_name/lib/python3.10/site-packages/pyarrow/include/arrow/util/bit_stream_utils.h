@@ -183,7 +183,7 @@ class BitReader {
 
   /// Returns the number of bytes left in the stream, not including the current
   /// byte (i.e., there may be an additional fraction of a byte).
-  int bytes_left() const {
+  int bytes_left() {
     return max_bytes_ -
            (byte_offset_ + static_cast<int>(bit_util::BytesForBits(bit_offset_)));
   }

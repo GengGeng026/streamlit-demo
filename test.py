@@ -20,6 +20,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from functools import lru_cache
 from streamlit_elements import mui, dashboard, elements, html, sync, lazy
+import uuid
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
@@ -360,7 +361,6 @@ class NotionDataVisualizer:
         df.to_csv(csv_path, index=False)
         logging.info(f"Generated {csv_path} file")
 
-
 # Constants
 SETTINGS_FILE = 'chart_settings.json'
 CSV_FILE = 'data/habits.csv'
@@ -392,8 +392,8 @@ def load_data():
     return None
 
 # Create chart
-def create_chart(df, chart_type, orientation, height, width):
-    chart = VizzuChart(width=width, height=height)
+def create_chart(df, chart_type, orientation, height):
+    chart = VizzuChart(width='100%', height=height, key=f"vizzu_{uuid.uuid4()}")
     data = Data()
     data.add_df(df)
     chart.animate(data)
@@ -451,8 +451,10 @@ def main():
         st.header("Chart Controls")
         chart_type = st.selectbox("Select Chart Type", ["bar", "scatter", "treemap"], key="chart_type")
         orientation = st.radio("Bar Chart Orientation", ["vertical", "horizontal"], key="orientation") if chart_type == "bar" else "vertical"
+        
+        # Display slider with current value
         num_items = st.slider("Number of items to display", 1, len(df), key="num_items")
-        chart_width = st.slider("Chart Width", 400, 1200, key="chart_width")
+        
         chart_height = st.slider("Chart Height", 300, 1000, key="chart_height")
         show_table = st.checkbox("Show Data Table", key="show_table")
 
@@ -461,8 +463,10 @@ def main():
     df.iloc[:num_items, df.columns.get_loc('Visible')] = True
 
     # Create and display chart
-    chart = create_chart(df[df['Visible']], chart_type, orientation, chart_height, chart_width)
-    chart.show()
+    chart_placeholder = st.empty()
+    with chart_placeholder:
+        chart = create_chart(df[df['Visible']], chart_type, orientation, chart_height)
+        chart.show()
 
     # Display editable data table
     if show_table:
@@ -471,18 +475,36 @@ def main():
         if not df.equals(edited_df):
             df = edited_df
             st.session_state.data = df
-            st.rerun()
+            st.experimental_rerun()
 
     # Save settings
     settings_to_save = {
         'chart_type': chart_type,
         'orientation': orientation,
         'num_items': num_items,
-        'chart_width': chart_width,
         'chart_height': chart_height,
         'show_table': show_table
     }
     save_settings(settings_to_save)
+
+    # Update chart when num_items changes
+    if 'last_num_items' not in st.session_state or st.session_state.last_num_items != num_items:
+        st.session_state.last_num_items = num_items
+        
+        # Fade out the chart
+        chart.animate(Config({"channels": {"y": {"detach": ["Total Minutes"]}}}))
+        
+        # Update the data
+        df['Visible'] = False
+        df.iloc[:num_items, df.columns.get_loc('Visible')] = True
+
+        # Fade in the chart with updated data
+        chart.animate(Config({"channels": {"y": {"attach": ["Total Minutes"]}}}))
+        
+        chart_placeholder.empty()
+        with chart_placeholder:
+            chart = create_chart(df[df['Visible']], chart_type, orientation, chart_height)
+            chart.show()
 
 if __name__ == "__main__":
     main()

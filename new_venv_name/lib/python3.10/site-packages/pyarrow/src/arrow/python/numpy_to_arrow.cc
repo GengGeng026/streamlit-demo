@@ -196,7 +196,7 @@ class NumPyConverter {
       mask_ = reinterpret_cast<PyArrayObject*>(mo);
     }
     length_ = static_cast<int64_t>(PyArray_SIZE(arr_));
-    itemsize_ = static_cast<int64_t>(PyArray_ITEMSIZE(arr_));
+    itemsize_ = static_cast<int>(PyArray_DESCR(arr_)->elsize);
     stride_ = static_cast<int64_t>(PyArray_STRIDES(arr_)[0]);
   }
 
@@ -296,7 +296,7 @@ class NumPyConverter {
   PyArrayObject* mask_;
   int64_t length_;
   int64_t stride_;
-  int64_t itemsize_;
+  int itemsize_;
 
   bool from_pandas_;
   compute::CastOptions cast_options_;
@@ -462,7 +462,8 @@ template <typename ArrowType>
 inline Status NumPyConverter::ConvertData(std::shared_ptr<Buffer>* data) {
   RETURN_NOT_OK(PrepareInputData<ArrowType>(data));
 
-  ARROW_ASSIGN_OR_RAISE(auto input_type, NumPyDtypeToArrow(dtype_));
+  std::shared_ptr<DataType> input_type;
+  RETURN_NOT_OK(NumPyDtypeToArrow(reinterpret_cast<PyObject*>(dtype_), &input_type));
 
   if (!input_type->Equals(*type_)) {
     RETURN_NOT_OK(CastBuffer(input_type, *data, length_, null_bitmap_, null_count_, type_,
@@ -478,8 +479,7 @@ inline Status NumPyConverter::ConvertData<Date32Type>(std::shared_ptr<Buffer>* d
 
   RETURN_NOT_OK(PrepareInputData<Date32Type>(data));
 
-  auto date_dtype =
-      reinterpret_cast<PyArray_DatetimeDTypeMetaData*>(PyDataType_C_METADATA(dtype_));
+  auto date_dtype = reinterpret_cast<PyArray_DatetimeDTypeMetaData*>(dtype_->c_metadata);
   if (dtype_->type_num == NPY_DATETIME) {
     // If we have inbound datetime64[D] data, this needs to be downcasted
     // separately here from int64_t to int32_t, because this data is not
@@ -490,7 +490,7 @@ inline Status NumPyConverter::ConvertData<Date32Type>(std::shared_ptr<Buffer>* d
       Status s = StaticCastBuffer<int64_t, int32_t>(**data, length_, pool_, data);
       RETURN_NOT_OK(s);
     } else {
-      ARROW_ASSIGN_OR_RAISE(input_type, NumPyDtypeToArrow(dtype_));
+      RETURN_NOT_OK(NumPyDtypeToArrow(reinterpret_cast<PyObject*>(dtype_), &input_type));
       if (!input_type->Equals(*type_)) {
         // The null bitmap was already computed in VisitNative()
         RETURN_NOT_OK(CastBuffer(input_type, *data, length_, null_bitmap_, null_count_,
@@ -498,7 +498,7 @@ inline Status NumPyConverter::ConvertData<Date32Type>(std::shared_ptr<Buffer>* d
       }
     }
   } else {
-    ARROW_ASSIGN_OR_RAISE(input_type, NumPyDtypeToArrow(dtype_));
+    RETURN_NOT_OK(NumPyDtypeToArrow(reinterpret_cast<PyObject*>(dtype_), &input_type));
     if (!input_type->Equals(*type_)) {
       RETURN_NOT_OK(CastBuffer(input_type, *data, length_, null_bitmap_, null_count_,
                                type_, cast_options_, pool_, data));
@@ -515,8 +515,7 @@ inline Status NumPyConverter::ConvertData<Date64Type>(std::shared_ptr<Buffer>* d
 
   RETURN_NOT_OK(PrepareInputData<Date64Type>(data));
 
-  auto date_dtype =
-      reinterpret_cast<PyArray_DatetimeDTypeMetaData*>(PyDataType_C_METADATA(dtype_));
+  auto date_dtype = reinterpret_cast<PyArray_DatetimeDTypeMetaData*>(dtype_->c_metadata);
   if (dtype_->type_num == NPY_DATETIME) {
     // If we have inbound datetime64[D] data, this needs to be downcasted
     // separately here from int64_t to int32_t, because this data is not
@@ -532,7 +531,7 @@ inline Status NumPyConverter::ConvertData<Date64Type>(std::shared_ptr<Buffer>* d
       }
       *data = std::move(result);
     } else {
-      ARROW_ASSIGN_OR_RAISE(input_type, NumPyDtypeToArrow(dtype_));
+      RETURN_NOT_OK(NumPyDtypeToArrow(reinterpret_cast<PyObject*>(dtype_), &input_type));
       if (!input_type->Equals(*type_)) {
         // The null bitmap was already computed in VisitNative()
         RETURN_NOT_OK(CastBuffer(input_type, *data, length_, null_bitmap_, null_count_,
@@ -540,7 +539,7 @@ inline Status NumPyConverter::ConvertData<Date64Type>(std::shared_ptr<Buffer>* d
       }
     }
   } else {
-    ARROW_ASSIGN_OR_RAISE(input_type, NumPyDtypeToArrow(dtype_));
+    RETURN_NOT_OK(NumPyDtypeToArrow(reinterpret_cast<PyObject*>(dtype_), &input_type));
     if (!input_type->Equals(*type_)) {
       RETURN_NOT_OK(CastBuffer(input_type, *data, length_, null_bitmap_, null_count_,
                                type_, cast_options_, pool_, data));
@@ -630,11 +629,11 @@ namespace {
 // NumPy unicode is UCS4/UTF32 always
 constexpr int kNumPyUnicodeSize = 4;
 
-Status AppendUTF32(const char* data, int64_t itemsize, int byteorder,
+Status AppendUTF32(const char* data, int itemsize, int byteorder,
                    ::arrow::internal::ChunkedStringBuilder* builder) {
   // The binary \x00\x00\x00\x00 indicates a nul terminator in NumPy unicode,
   // so we need to detect that here to truncate if necessary. Yep.
-  Py_ssize_t actual_length = 0;
+  int actual_length = 0;
   for (; actual_length < itemsize / kNumPyUnicodeSize; ++actual_length) {
     const char* code_point = data + actual_length * kNumPyUnicodeSize;
     if ((*code_point == '\0') && (*(code_point + 1) == '\0') &&
@@ -707,7 +706,7 @@ Status NumPyConverter::Visit(const StringType& type) {
   auto AppendNonNullValue = [&](const uint8_t* data) {
     if (is_binary_type) {
       if (ARROW_PREDICT_TRUE(util::ValidateUTF8(data, itemsize_))) {
-        return builder.Append(data, static_cast<int32_t>(itemsize_));
+        return builder.Append(data, itemsize_);
       } else {
         return Status::Invalid("Encountered non-UTF8 binary value: ",
                                HexEncode(data, itemsize_));
@@ -752,13 +751,12 @@ Status NumPyConverter::Visit(const StructType& type) {
     PyAcquireGIL gil_lock;
 
     // Create converters for each struct type field
-    if (PyDataType_FIELDS(dtype_) == NULL || !PyDict_Check(PyDataType_FIELDS(dtype_))) {
+    if (dtype_->fields == NULL || !PyDict_Check(dtype_->fields)) {
       return Status::TypeError("Expected struct array");
     }
 
     for (auto field : type.fields()) {
-      PyObject* tup =
-          PyDict_GetItemString(PyDataType_FIELDS(dtype_), field->name().c_str());
+      PyObject* tup = PyDict_GetItemString(dtype_->fields, field->name().c_str());
       if (tup == NULL) {
         return Status::Invalid("Missing field '", field->name(), "' in struct array");
       }
