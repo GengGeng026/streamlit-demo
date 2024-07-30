@@ -475,7 +475,7 @@ def main():
         if not df.equals(edited_df):
             df = edited_df
             st.session_state.data = df
-            st.experimental_rerun()
+            st.rerun()
 
     # Save settings
     settings_to_save = {
