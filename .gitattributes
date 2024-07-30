@@ -1,0 +1,2 @@
+new_venv_name/lib/python3.10/site-packages/scipy/.dylibs/libscipy_openblas.dylib filter=lfs diff=lfs merge=lfs -text
+new_venv_name/lib/python3.10/site-packages/torch/lib/libtorch_cpu.dylib filter=lfs diff=lfs merge=lfs -text

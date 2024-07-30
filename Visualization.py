@@ -391,9 +391,8 @@ def load_data():
         return df
     return None
 
-# Create chart
-def create_chart(df, chart_type, orientation, height):
-    chart = VizzuChart(width='100%', height=height, key=f"vizzu_{uuid.uuid4()}")
+# Create or update chart
+def update_chart(chart, df, chart_type, orientation):
     data = Data()
     data.add_df(df)
     chart.animate(data)
@@ -429,7 +428,6 @@ def create_chart(df, chart_type, orientation, height):
         config["title"] += " (Treemap)"
 
     chart.animate(Config(config))
-    return chart
 
 # Main app
 def main():
@@ -462,11 +460,13 @@ def main():
     df['Visible'] = False
     df.iloc[:num_items, df.columns.get_loc('Visible')] = True
 
-    # Create and display chart
-    chart_placeholder = st.empty()
-    with chart_placeholder:
-        chart = create_chart(df[df['Visible']], chart_type, orientation, chart_height)
-        chart.show()
+    # Create chart if not exist
+    if 'chart' not in st.session_state:
+        st.session_state.chart = VizzuChart(width='100%', height=st.session_state.chart_height, key=f"vizzu_{uuid.uuid4()}")
+
+    # Update and display chart
+    update_chart(st.session_state.chart, df[df['Visible']], chart_type, orientation)
+    st.session_state.chart.show()
 
     # Display editable data table
     if show_table:
@@ -486,25 +486,6 @@ def main():
         'show_table': show_table
     }
     save_settings(settings_to_save)
-
-    # Update chart when num_items changes
-    if 'last_num_items' not in st.session_state or st.session_state.last_num_items != num_items:
-        st.session_state.last_num_items = num_items
-        
-        # Fade out the chart
-        chart.animate(Config({"channels": {"y": {"detach": ["Total Minutes"]}}}))
-        
-        # Update the data
-        df['Visible'] = False
-        df.iloc[:num_items, df.columns.get_loc('Visible')] = True
-
-        # Fade in the chart with updated data
-        chart.animate(Config({"channels": {"y": {"attach": ["Total Minutes"]}}}))
-        
-        chart_placeholder.empty()
-        with chart_placeholder:
-            chart = create_chart(df[df['Visible']], chart_type, orientation, chart_height)
-            chart.show()
 
 if __name__ == "__main__":
     main()
