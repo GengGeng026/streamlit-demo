@@ -393,6 +393,9 @@ def load_data():
 
 # Create or update chart
 def update_chart(chart, df, chart_type, orientation):
+    # Clear existing animations to avoid replaying history
+    chart = VizzuChart()
+
     data = Data()
     data.add_df(df)
     chart.animate(data)
@@ -428,9 +431,11 @@ def update_chart(chart, df, chart_type, orientation):
         config["title"] += " (Treemap)"
 
     chart.animate(Config(config))
+    return chart
 
 # Main app
 def main():
+    st.session_state.chart = None
     st.set_page_config(layout="wide")
 
     # Initialize settings
@@ -460,12 +465,8 @@ def main():
     df['Visible'] = False
     df.iloc[:num_items, df.columns.get_loc('Visible')] = True
 
-    # Create chart if not exist
-    if 'chart' not in st.session_state:
-        st.session_state.chart = VizzuChart(width='100%', height=st.session_state.chart_height, key=f"vizzu_{uuid.uuid4()}")
-
-    # Update and display chart
-    update_chart(st.session_state.chart, df[df['Visible']], chart_type, orientation)
+    # Create or update chart
+    st.session_state.chart = update_chart(st.session_state.chart, df[df['Visible']], chart_type, orientation)
     st.session_state.chart.show()
 
     # Display editable data table
