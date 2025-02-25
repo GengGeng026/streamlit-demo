@@ -2,24 +2,23 @@
 # https://ipyvizzu.vizzuhq.com/latest/examples/presets
 import pandas as pd
 from ipyvizzu import Chart, Data, Config, Style
+import streamlit as st
 from streamlit.components.v1 import html
+from streamlit_elements import mui, dashboard, elements, html, sync, lazy
+from streamlit_vizzu import Config, Data, VizzuChart
 import numpy as np
 from collections import Counter
 import json
 import os
 import asyncio
 import aiohttp
-import pandas as pd
-import streamlit as st
 from dotenv import load_dotenv
-from streamlit_vizzu import Config, Data, VizzuChart
 import random
 import logging
 from typing import List, Dict, Tuple
 import plotly.express as px
 import plotly.graph_objects as go
 from functools import lru_cache
-from streamlit_elements import mui, dashboard, elements, html, sync, lazy
 import uuid
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -437,39 +436,46 @@ def update_chart(chart, df, chart_type, orientation):
 def main():
     st.session_state.chart = None
     st.set_page_config(layout="wide")
+    
+    # 添加一個刷新 Notion 數據的按鈕
+    if st.button("刷新 Notion 數據"):
+        notion_visualizer = NotionDataVisualizer()
+        # 調用 NotionDataVisualizer 的生成可視化數據函數（注意：這是異步函數，所以使用 asyncio.run()）
+        asyncio.run(notion_visualizer.generate_visualization())
+        # 清除 load_data 的緩存，確保最新的 CSV 能被加載
+        st.cache_data.clear()
+        st.success("數據更新完成")
+        st.rerun()
 
-    # Initialize settings
+    # 初始化設置
     settings = load_settings()
     for key, value in settings.items():
         get_setting(key, value)
 
-    # Load data
+    # 加載數據
     df = load_data()
     if df is None:
-        st.error("No data found. Please generate the CSV file first.")
+        st.error("未找到數據。請先生成 CSV 文件。")
         return
 
-    # Sidebar controls
+    # 以下是 Sidebar 控制和圖表展示部分...
     with st.sidebar:
         st.header("Chart Controls")
         chart_type = st.selectbox("Select Chart Type", ["bar", "scatter", "treemap"], key="chart_type")
         orientation = st.radio("Bar Chart Orientation", ["vertical", "horizontal"], key="orientation") if chart_type == "bar" else "vertical"
-        
-        # Display slider with current value
         num_items = st.slider("Number of items to display", 1, len(df), key="num_items")
-        
         chart_height = st.slider("Chart Height", 300, 1000, key="chart_height")
         show_table = st.checkbox("Show Data Table", key="show_table")
 
-    # Update visible items
+    # 更新數據可見性
     df['Visible'] = False
     df.iloc[:num_items, df.columns.get_loc('Visible')] = True
 
-    # Create or update chart
+    # 創建或更新圖表
     st.session_state.chart = update_chart(st.session_state.chart, df[df['Visible']], chart_type, orientation)
     st.session_state.chart.show()
 
-    # Display editable data table
+    # 顯示可編輯的數據表
     if show_table:
         st.subheader("Data Table")
         edited_df = st.data_editor(df, key="data_editor", use_container_width=True)
@@ -478,7 +484,7 @@ def main():
             st.session_state.data = df
             st.rerun()
 
-    # Save settings
+    # 保存設置
     settings_to_save = {
         'chart_type': chart_type,
         'orientation': orientation,
