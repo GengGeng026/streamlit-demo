@@ -157,42 +157,50 @@ if os.path.exists("habits.csv"):
     fig = None
     if chart_type == "Bar Chart":
         if orientation == "Horizontal":
-            fig = px.bar(df, x="Total Minutes", y="Category", text="Total Minutes", title="Category vs Total Minutes", height=chart_height)
+            fig = px.bar(df, x="Total Minutes", y="Category", text="Total Minutes", title="Category    VS    Total Min", height=chart_height)
         else:
-            fig = px.bar(df, x="Category", y="Total Minutes", text="Total Minutes", title="Category vs Total Minutes", height=chart_height)
+            fig = px.bar(df, x="Category", y="Total Minutes", text="Total Minutes", title="Category    VS    Total Min", height=chart_height)
     elif chart_type == "Scatter Chart":
-        fig = px.scatter(df, x="Total Minutes", y="Category", text="Total Minutes", title="Category vs Total Minutes", height=chart_height)
+        fig = px.scatter(df, x="Total Minutes", y="Category", text="Total Minutes", title="Category    VS    Total Min", height=chart_height)
     elif chart_type == "Tree Chart":
-        fig = px.treemap(df, path=["Category"], values="Total Minutes", title="Category   vs   Total Minutes", height=chart_height)
+        fig = px.treemap(df, path=["Category"], values="Total Minutes", title="Category   VS   Total Mins", height=chart_height)
     elif chart_type == "Line Chart":
         if line_mode == "Line Chart":
-            fig = px.line(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear", title="Category    VS    Total Minutes", height=chart_height)
+            fig = px.line(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear", title="Category    VS    Total Min", height=chart_height)
         else:
-            fig = px.area(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear", title="Category vs Total Minutes", height=chart_height)
+            fig = px.area(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear", title="Category    VS    Total Min", height=chart_height)
     elif chart_type == "Pie Chart":
         fig = px.pie(df, names="Category", values="Total Minutes", title="Category Distribution", height=chart_height)
     elif chart_type == "Bubble Chart":
-        fig = px.scatter(df, x="Category", y="Total Minutes", size="Total Minutes", color="Category", title="Category vs Total Minutes", height=chart_height)
+        fig = px.scatter(df, x="Category", y="Total Minutes", size="Total Minutes", color="Category", title="Category    VS    Total Min", height=chart_height)
     elif chart_type == "Box Plot":
         if orientation == "Horizontal":
-            fig = px.box(df, x="Total Minutes", y="Category", title="Category vs Total Minutes", height=chart_height)
+            fig = px.box(df, x="Total Minutes", y="Category", title="Category    VS    Total Min", height=chart_height)
         else:
-            fig = px.box(df, x="Category", y="Total Minutes", title="Category vs Total Minutes", height=chart_height)
+            fig = px.box(df, x="Category", y="Total Minutes", title="Category    VS    Total Min", height=chart_height)
     elif chart_type == "Histogram":
         if orientation == "Horizontal":
             fig = px.histogram(df, x="Total Minutes", title="Total Minutes Distribution", height=chart_height)
         else:
             fig = px.histogram(df, x="Category", title="Category Distribution", height=chart_height)
     elif chart_type == "Sunburst Chart":
-        fig = px.sunburst(df, path=["Category"], values="Total Minutes", title="Category vs Total Minutes", height=chart_height)
+        fig = px.sunburst(df, path=["Category"], values="Total Minutes", title="Category    VS    Total Min", height=chart_height)
     else:
         fig = None
 
     if fig:
+        fig.update_layout(
+            title=dict(
+                text=fig.layout.title.text,
+                x=0.5,
+                xanchor="center"
+            ),
+            margin=dict(l=20, r=20, t=50, b=20)
+        )
         st.plotly_chart(fig, use_container_width=True)
     
     if show_table:
         st.caption("Data shown on the chart")
         st.dataframe(df)
 else:
-    st.info("No CSV data found. Please update data first.")
+    st.info("I'm hungry. You can feed me data.")
