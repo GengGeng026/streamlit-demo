@@ -13,7 +13,7 @@ import time  # 用于延时
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 # 从环境变量中获取 Notion API Token 与数据库 ID
-API_TOKEN = os.getenv("NOTION_API_KEY")
+API_TOKEN = os.getenv("NOTION_API_TOKEN")
 DATABASE_ID = os.getenv("NOTION_HABITS_DATABASE_ID")
 
 # 查询参数：过滤 Total min Par > 0，排序依据公式属性 Parent or Sub 降序
@@ -108,19 +108,24 @@ if "update_clicked" not in st.session_state:
     st.session_state["update_clicked"] = False
 
 # 侧边栏控件：图表类型、图表高度、是否显示数据表
+# 使 "Line Chart" 成为默认选项（通过设置 index=0）
 chart_type = st.sidebar.selectbox("Type", [
-    "Bar Chart", "Scatter Chart", "Tree Chart", "Line Chart", "Pie Chart", 
+    "Line Chart", "Bar Chart", "Scatter Chart", "Tree Chart", "Pie Chart", 
     "Bubble Chart", "Box Plot", "Histogram", "Sunburst Chart"
-])
+], index=0)
 
+# 当选择 Bar Chart、Box Plot 或 Histogram 时，显示方向切换
 if chart_type in ["Bar Chart", "Box Plot", "Histogram"]:
     orientation = st.sidebar.radio("Direction", ["Vertical", "Horizontal"], index=1)
 else:
     orientation = None
 
+# 当选择 Line Chart 时，显示两个 radio 按钮：
+# “选择折线模式”：默认选 "Line Chart"（index=0）
+# “线条样式”：默认选 "Curved"（将顺序设置为 ["Curved", "Straight"]，index=0）
 if chart_type == "Line Chart":
     line_mode = st.sidebar.radio("Mode", ["Line Chart", "Area Chart"], index=0, help="Try different modes")
-    curve_option = st.sidebar.radio("Curve", ["Straight", "Curved"], index=0, help="Bold or Wavy")
+    curve_option = st.sidebar.radio("Curve", ["Curved", "Straight"], index=0, help="Choose curved or straight lines")
 else:
     line_mode = None
     curve_option = None
@@ -136,7 +141,8 @@ if "updating" not in st.session_state:
     st.session_state["updating"] = False
 
 if not st.session_state["updating"]:
-    if button_placeholder.button("Feed"):
+    if button_placeholder.button("Update Data"):
+        st.session_state["update_clicked"] = True
         st.session_state["updating"] = True
         button_placeholder.empty()  # 让按钮立即消失
 
@@ -147,8 +153,8 @@ if st.session_state["updating"]:
         df = pd.DataFrame(list(valid.items()), columns=["Category", "Total Minutes"])
         df.to_csv("habits.csv", index=False)
         msg_placeholder = st.empty()
-        msg_placeholder.success("Data updated successfully!")
-        time.sleep(3)  # 模拟等待3秒（注意：这会阻塞页面刷新）\n        msg_placeholder.empty()
+        msg_placeholder.success("Data updated and saved to habits.csv")
+        time.sleep(3)  # 模拟等待3秒（这会阻塞页面刷新）\n        msg_placeholder.empty()
     st.session_state["updating"] = False
 
 if os.path.exists("habits.csv"):
@@ -157,34 +163,49 @@ if os.path.exists("habits.csv"):
     fig = None
     if chart_type == "Bar Chart":
         if orientation == "Horizontal":
-            fig = px.bar(df, x="Total Minutes", y="Category", text="Total Minutes", title="Category vs Total Minutes", height=chart_height)
+            fig = px.bar(df, x="Total Minutes", y="Category", text="Total Minutes", 
+                         title="Bar Chart: Category vs Total Minutes", height=chart_height)
         else:
-            fig = px.bar(df, x="Category", y="Total Minutes", text="Total Minutes", title="Category vs Total Minutes", height=chart_height)
+            fig = px.bar(df, x="Category", y="Total Minutes", text="Total Minutes", 
+                         title="Bar Chart: Category vs Total Minutes", height=chart_height)
     elif chart_type == "Scatter Chart":
-        fig = px.scatter(df, x="Total Minutes", y="Category", text="Total Minutes", title="Category vs Total Minutes", height=chart_height)
+        fig = px.scatter(df, x="Total Minutes", y="Category", text="Total Minutes", 
+                         title="Scatter Chart: Category vs Total Minutes", height=chart_height)
     elif chart_type == "Tree Chart":
-        fig = px.treemap(df, path=["Category"], values="Total Minutes", title="Category   vs   Total Minutes", height=chart_height)
+        fig = px.treemap(df, path=["Category"], values="Total Minutes", 
+                         title="Tree Chart: Category vs Total Minutes", height=chart_height)
     elif chart_type == "Line Chart":
         if line_mode == "Line Chart":
-            fig = px.line(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear", title="Category    VS    Total Minutes", height=chart_height)
+            fig = px.line(df, x="Category", y="Total Minutes", 
+                          line_shape="spline" if curve_option=="Curved" else "linear", 
+                          title="Line Chart: Category vs Total Minutes", height=chart_height)
         else:
-            fig = px.area(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear", title="Category vs Total Minutes", height=chart_height)
+            fig = px.area(df, x="Category", y="Total Minutes", 
+                          line_shape="spline" if curve_option=="Curved" else "linear", 
+                          title="Area Chart: Category vs Total Minutes", height=chart_height)
     elif chart_type == "Pie Chart":
-        fig = px.pie(df, names="Category", values="Total Minutes", title="Category Distribution", height=chart_height)
+        fig = px.pie(df, names="Category", values="Total Minutes", 
+                     title="Pie Chart: Category Distribution", height=chart_height)
     elif chart_type == "Bubble Chart":
-        fig = px.scatter(df, x="Category", y="Total Minutes", size="Total Minutes", color="Category", title="Category vs Total Minutes", height=chart_height)
+        fig = px.scatter(df, x="Category", y="Total Minutes", size="Total Minutes", color="Category", 
+                         title="Bubble Chart: Category vs Total Minutes", height=chart_height)
     elif chart_type == "Box Plot":
         if orientation == "Horizontal":
-            fig = px.box(df, x="Total Minutes", y="Category", title="Category vs Total Minutes", height=chart_height)
+            fig = px.box(df, x="Total Minutes", y="Category", 
+                         title="Box Plot: Category vs Total Minutes", height=chart_height)
         else:
-            fig = px.box(df, x="Category", y="Total Minutes", title="Category vs Total Minutes", height=chart_height)
+            fig = px.box(df, x="Category", y="Total Minutes", 
+                         title="Box Plot: Category vs Total Minutes", height=chart_height)
     elif chart_type == "Histogram":
         if orientation == "Horizontal":
-            fig = px.histogram(df, x="Total Minutes", title="Total Minutes Distribution", height=chart_height)
+            fig = px.histogram(df, x="Total Minutes", 
+                               title="Histogram: Total Minutes Distribution", height=chart_height)
         else:
-            fig = px.histogram(df, x="Category", title="Category Distribution", height=chart_height)
+            fig = px.histogram(df, x="Category", 
+                               title="Histogram: Category Distribution", height=chart_height)
     elif chart_type == "Sunburst Chart":
-        fig = px.sunburst(df, path=["Category"], values="Total Minutes", title="Category vs Total Minutes", height=chart_height)
+        fig = px.sunburst(df, path=["Category"], values="Total Minutes", 
+                          title="Sunburst Chart: Category vs Total Minutes", height=chart_height)
     else:
         fig = None
 
