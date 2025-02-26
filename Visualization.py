@@ -4,8 +4,8 @@ import aiohttp
 import json
 import pandas as pd
 import streamlit as st
+import plotly.express as px
 from dotenv import load_dotenv
-from streamlit_vizzu import Config, Data, VizzuChart
 import random
 import logging
 
@@ -120,24 +120,15 @@ if st.button("Update Data"):
 if os.path.exists("habits.csv"):
     df = pd.read_csv("habits.csv")
     
-    chart = VizzuChart(height=chart_height, width=480)
-    data_obj = Data()
-    data_obj.add_df(df)
-    chart.animate(data_obj)
+    if chart_type == "Bar Chart":
+        fig = px.bar(df, x="Total Minutes", y="Category", text="Total Minutes", title="Bar Chart: Category vs Total Minutes")
+    elif chart_type == "Scatter Chart":
+        fig = px.scatter(df, x="Total Minutes", y="Category", size="Total Minutes", text="Total Minutes", title="Scatter Chart: Category vs Total Minutes")
+    elif chart_type == "Tree Chart":
+        fig = px.treemap(df, path=["Category"], values="Total Minutes", title="Tree Chart: Category vs Total Minutes")
     
-    config = Config({
-        "channels": {
-            "x": {"set": ["Total Minutes"]},
-            "y": {"set": ["Category"]},
-            "label": {"set": ["Total Minutes"]}
-        },
-        "title": f"{chart_type}: Category vs Total Minutes",
-        "geometry": "rectangle" if chart_type == "Bar Chart" else "circle" if chart_type == "Scatter Chart" else "treemap"
-    })
-    
-    chart.animate(config)
-    st.write("Generated Chart:")
-    chart.show()
+    fig.update_layout(height=chart_height, transition_duration=500)
+    st.plotly_chart(fig)
     
     if show_table:
         st.caption("Data shown on the chart")
