@@ -10,6 +10,18 @@ import random
 import logging
 import time  # 用于延时
 
+st.markdown(
+    """
+    <style>
+    /* 减少主内容区域顶部空白 */
+    .block-container {
+        padding-top: 1rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 # 从环境变量中获取 Notion API Token 与数据库 ID
@@ -189,18 +201,63 @@ if os.path.exists("habits.csv"):
         fig = None
 
     if fig:
+        legend_font_size = max(22, chart_height // 20)  # 根据图表高度计算字体大小
         fig.update_layout(
             title=dict(
                 text=fig.layout.title.text,
                 x=0.5,
                 xanchor="center"
             ),
-            margin=dict(l=20, r=20, t=50, b=20)
+            margin=dict(l=20, r=20, t=50, b=20),
+            legend=dict(
+                font=dict(size=legend_font_size)
+            )
         )
         st.plotly_chart(fig, use_container_width=True)
-    
+        
     if show_table:
         st.caption("Data shown on the chart")
-        st.dataframe(df)
+        # 在插入序号列之前复制 DataFrame
+        df_with_index = df.copy()
+        df_with_index.insert(0, "No.", range(1, len(df_with_index) + 1))
+        
+        # 定义自定义 CSS，用于暗色主题下的表格样式
+        dark_table_css = """
+        <style>
+        .styled-table {
+            width: 100% !important;
+            margin: 0 auto;
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 1px solid #444;
+            border-radius: 10px;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .styled-table th, .styled-table td {
+            text-align: center !important;
+            padding: 8px 12px;
+        }
+        /* 表头使用稍微深一点的背景 */
+        .styled-table th {
+            background-color: #333;
+            color: #ddd;
+            font-weight: 600;
+        }
+        /* 表格数据区域全使用统一的暗色背景 */
+        .styled-table td {
+            background-color: #1e1e1e;
+            color: #ddd;
+        }
+        </style>
+        """
+        st.markdown(dark_table_css, unsafe_allow_html=True)
+        
+        # 生成 HTML 表格，添加样式类
+        html_table = df_with_index.to_html(index=False)
+        # 强制给 <table> 标签加上 class 和内联样式保证宽度100%
+        html_table = html_table.replace("<table", "<table class='styled-table' style='width:100%;' ")
+        st.markdown(html_table, unsafe_allow_html=True)
+
 else:
     st.info("I'm hungry. You can feed me data.")
