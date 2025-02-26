@@ -103,27 +103,25 @@ async def get_valid_parent_habits():
 
 st.title("Notion Data Visualization")
 
-# 侧边栏控件：图表类型、图表高度以及是否显示数据表
+# 单选下拉框：选择图表类型
 chart_type = st.sidebar.selectbox("选择图表类型", [
     "Bar Chart", "Scatter Chart", "Tree Chart", "Line Chart", "Pie Chart", 
     "Bubble Chart", "Box Plot", "Histogram", "Sunburst Chart"
 ])
 
-show_orientation = chart_type in ["Bar Chart", "Box Plot", "Histogram"]
-show_chart_toggle = chart_type == "Line Chart"
-show_curve_toggle = chart_type == "Line Chart"
-
-if show_orientation:
-    chart_option = st.sidebar.radio("选择选项", ["Vertical", "Horizontal"], index=1)
-elif show_chart_toggle:
-    chart_option = st.sidebar.radio("选择选项", ["Line Chart", "Area Chart"], index=0)
+# 当选择 Bar Chart、Box Plot 或 Histogram 时显示方向切换
+if chart_type in ["Bar Chart", "Box Plot", "Histogram"]:
+    orientation = st.sidebar.radio("选择方向", ["Vertical", "Horizontal"], index=1)
 else:
-    chart_option = "Line Chart"
+    orientation = None
 
+# 当选择 Line Chart 时显示两个 radio 按钮：切换折线/面积和切换线条样式
 if chart_type == "Line Chart":
+    line_mode = st.sidebar.radio("选择折线模式", ["Line Chart", "Area Chart"], index=0)
     curve_option = st.sidebar.radio("线条样式", ["Straight", "Curved"], index=0)
 else:
-    curve_option = "Straight"
+    line_mode = None
+    curve_option = None
 
 chart_height = st.sidebar.slider("图表高度", min_value=300, max_value=1000, value=360)
 show_table = st.sidebar.checkbox("显示数据表", value=True)
@@ -139,17 +137,38 @@ if os.path.exists("habits.csv"):
     
     fig = None
     if chart_type == "Bar Chart":
-        fig = px.bar(df, x="Total Minutes" if chart_option == "Horizontal" else "Category", y="Category" if chart_option == "Horizontal" else "Total Minutes", text="Total Minutes", title="Bar Chart: Category vs Total Minutes")
+        if orientation == "Horizontal":
+            fig = px.bar(df, x="Total Minutes", y="Category", text="Total Minutes", title="Bar Chart: Category vs Total Minutes")
+        else:
+            fig = px.bar(df, x="Category", y="Total Minutes", text="Total Minutes", title="Bar Chart: Category vs Total Minutes")
     elif chart_type == "Scatter Chart":
         fig = px.scatter(df, x="Total Minutes", y="Category", text="Total Minutes", title="Scatter Chart: Category vs Total Minutes")
     elif chart_type == "Tree Chart":
         fig = px.treemap(df, path=["Category"], values="Total Minutes", title="Tree Chart: Category vs Total Minutes")
     elif chart_type == "Line Chart":
-        if chart_option == "Line Chart":
-            fig = px.line(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option == "Curved" else "linear", title="Line Chart: Category vs Total Minutes")
+        if line_mode == "Line Chart":
+            fig = px.line(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear", title="Line Chart: Category vs Total Minutes")
         else:
-            fig = px.area(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option == "Curved" else "linear", title="Area Chart: Category vs Total Minutes")
-    
+            fig = px.area(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear", title="Area Chart: Category vs Total Minutes")
+    elif chart_type == "Pie Chart":
+        fig = px.pie(df, names="Category", values="Total Minutes", title="Pie Chart: Category Distribution")
+    elif chart_type == "Bubble Chart":
+        fig = px.scatter(df, x="Category", y="Total Minutes", size="Total Minutes", color="Category", title="Bubble Chart: Category vs Total Minutes")
+    elif chart_type == "Box Plot":
+        if orientation == "Horizontal":
+            fig = px.box(df, x="Total Minutes", y="Category", title="Box Plot: Category vs Total Minutes")
+        else:
+            fig = px.box(df, x="Category", y="Total Minutes", title="Box Plot: Category vs Total Minutes")
+    elif chart_type == "Histogram":
+        if orientation == "Horizontal":
+            fig = px.histogram(df, x="Total Minutes", title="Histogram: Total Minutes Distribution")
+        else:
+            fig = px.histogram(df, x="Category", title="Histogram: Category Distribution")
+    elif chart_type == "Sunburst Chart":
+        fig = px.sunburst(df, path=["Category"], values="Total Minutes", title="Sunburst Chart: Category vs Total Minutes")
+    else:
+        fig = None
+
     if fig:
         st.plotly_chart(fig, use_container_width=True)
     
