@@ -5,6 +5,7 @@ import json
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+import plotly.graph_objects as go
 from dotenv import load_dotenv
 import random
 import logging
@@ -65,7 +66,6 @@ async def fetch_notion_data(session, start_cursor=None):
         response.raise_for_status()
         return await response.json()
 
-# 仅返回 Name 字段以 "*" 结尾的父习惯
 async def get_valid_parent_habits():
     valid_parents = {}  # {name: total_minutes}
     start_cursor = None
@@ -85,7 +85,6 @@ async def get_valid_parent_habits():
             for page in results:
                 try:
                     name = page["properties"]["Name"]["title"][0]["plain_text"]
-                    # 仅考虑标题后缀带有 "*" 的记录
                     if name.endswith("*"):
                         total = page["properties"]["Total min Par"]["formula"]["number"]
                         valid_parents[name] = total
@@ -105,30 +104,54 @@ async def get_valid_parent_habits():
 st.title("Notion Data Visualization")
 
 # 侧边栏控件：图表类型、图表高度以及是否显示数据表
-chart_type = st.sidebar.selectbox("选择图表类型", ["Bar Chart", "Scatter Chart", "Tree Chart"])
+chart_type = st.sidebar.selectbox("选择图表类型", [
+    "Bar Chart", "Scatter Chart", "Tree Chart", "Line Chart", "Pie Chart", 
+    "Bubble Chart", "Box Plot", "Histogram", "Sunburst Chart"
+])
+
+show_orientation = chart_type in ["Bar Chart", "Box Plot", "Histogram"]
+show_chart_toggle = chart_type == "Line Chart"
+show_curve_toggle = chart_type == "Line Chart"
+
+if show_orientation:
+    chart_option = st.sidebar.radio("选择选项", ["Vertical", "Horizontal"], index=1)
+elif show_chart_toggle:
+    chart_option = st.sidebar.radio("选择选项", ["Line Chart", "Area Chart"], index=0)
+else:
+    chart_option = "Line Chart"
+
+if chart_type == "Line Chart":
+    curve_option = st.sidebar.radio("线条样式", ["Straight", "Curved"], index=0)
+else:
+    curve_option = "Straight"
+
 chart_height = st.sidebar.slider("图表高度", min_value=300, max_value=1000, value=360)
 show_table = st.sidebar.checkbox("显示数据表", value=True)
 
-# 更新数据按钮：查询 Notion 并保存数据到 habits.csv
 if st.button("Update Data"):
     valid = asyncio.run(get_valid_parent_habits())
     df = pd.DataFrame(list(valid.items()), columns=["Category", "Total Minutes"])
     df.to_csv("habits.csv", index=False)
     st.success("Data updated and saved to habits.csv")
 
-# 自动图显化 habits.csv 的数据
 if os.path.exists("habits.csv"):
     df = pd.read_csv("habits.csv")
     
+    fig = None
     if chart_type == "Bar Chart":
-        fig = px.bar(df, x="Total Minutes", y="Category", text="Total Minutes", title="Bar Chart: Category vs Total Minutes")
+        fig = px.bar(df, x="Total Minutes" if chart_option == "Horizontal" else "Category", y="Category" if chart_option == "Horizontal" else "Total Minutes", text="Total Minutes", title="Bar Chart: Category vs Total Minutes")
     elif chart_type == "Scatter Chart":
-        fig = px.scatter(df, x="Total Minutes", y="Category", size="Total Minutes", text="Total Minutes", title="Scatter Chart: Category vs Total Minutes")
+        fig = px.scatter(df, x="Total Minutes", y="Category", text="Total Minutes", title="Scatter Chart: Category vs Total Minutes")
     elif chart_type == "Tree Chart":
         fig = px.treemap(df, path=["Category"], values="Total Minutes", title="Tree Chart: Category vs Total Minutes")
+    elif chart_type == "Line Chart":
+        if chart_option == "Line Chart":
+            fig = px.line(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option == "Curved" else "linear", title="Line Chart: Category vs Total Minutes")
+        else:
+            fig = px.area(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option == "Curved" else "linear", title="Area Chart: Category vs Total Minutes")
     
-    fig.update_layout(height=chart_height, transition_duration=500)
-    st.plotly_chart(fig)
+    if fig:
+        st.plotly_chart(fig, use_container_width=True)
     
     if show_table:
         st.caption("Data shown on the chart")
