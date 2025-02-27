@@ -8,10 +8,10 @@ from dotenv import load_dotenv
 import logging
 import time
 
-# 設置頁面為寬屏模式
+# 設置頁面為寬屏模式（必須是第一個 Streamlit 命令）
 st.set_page_config(layout="wide")
 
-# 自定義 CSS 實現響應式佈局與樣式優化
+# 自定義 CSS 實現響應式佈局與表格樣式統一
 st.markdown(
     """
     <style>
@@ -24,11 +24,42 @@ st.markdown(
         display: grid;
         grid-template-columns: repeat(2, 1fr); /* 寬屏時兩列 */
         gap: 15px; /* 增加間距 */
+        align-items: stretch; /* 確保子元素高度一致 */
     }
-    @media (max-width: 768px) { /* 窄屏斷點調整為 768px */
+    @media (max-width: 1000px) { /* 窄屏斷點為 1000px */
         .grid-container {
             grid-template-columns: 1fr; /* 窄屏時一列 */
         }
+    }
+    /* 確保圖表和表格容器高度匹配 */
+    .chart-wrapper, .table-wrapper {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    /* 統一表格樣式（適用於 .legend-table 和 .styled-table） */
+    .legend-table, .styled-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        border: 1px solid #444;
+        border-radius: 10px; /* 統一圓角 */
+        overflow: hidden;
+        font-family: 'Segoe UI', sans-serif;
+        font-size: 14px; /* 統一字體大小 */
+        background-color: rgba(1, 1, 1, 1); /* 半透明深色背景 */
+    }
+    .legend-table th, .legend-table td, .styled-table th, .styled-table td {
+        text-align: center;
+        padding: 0.3em 0.3em 0.3em 0.3em; /* 統一間距 */
+    }
+    .legend-table th, .styled-table th {
+        background-color: rgba(51, 51, 51, 0.7); /* 半透明表頭 */
+        color: #ddd;
+        font-weight: 600;
+    }
+    .legend-table td, .styled-table td {
+        color: #ddd;
     }
     </style>
     """,
@@ -150,7 +181,7 @@ if st.session_state["updating"]:
         df.to_csv("habits.csv", index=False)
         msg_placeholder = st.empty()
         msg_placeholder.success("Data updated successfully!")
-        time.sleep(1)  # 縮短等待時間，避免過長阻塞
+        time.sleep(1)
         msg_placeholder.empty()
     st.session_state["updating"] = False
 
@@ -158,8 +189,10 @@ if st.session_state["updating"]:
 if os.path.exists("habits.csv"):
     df = pd.read_csv("habits.csv")
     
-    # 圖表生成
+    # 圖表生成與顏色映射
     fig = None
+    color_map = {}  # 在生成圖表時記錄顏色
+    colors = px.colors.qualitative.Plotly  # 使用 Plotly 的預設顏色序列
     if chart_type == "Line Chart":
         fig = px.line(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear",
                       title="Category vs Total Min", height=chart_height, color_discrete_sequence=[primary_color]) if line_mode == "Line Chart" else \
@@ -169,26 +202,44 @@ if os.path.exists("habits.csv"):
         fig = px.bar(df, x="Total Minutes" if orientation=="Horizontal" else "Category", y="Category" if orientation=="Horizontal" else "Total Minutes",
                      text="Total Minutes", title="Category vs Total Min", height=chart_height, color_discrete_sequence=[primary_color])
     elif chart_type == "Bubble Chart":
-        fig = px.scatter(df, x="Category", y="Total Minutes", size="Total Minutes", color="Category", title="Category vs Total Min", height=chart_height)
+        df_sorted = df.sort_values("Total Minutes", ascending=False)  # 按 Total Minutes 降序排序，與圖表一致
+        fig = px.scatter(df_sorted, x="Category", y="Total Minutes", size="Total Minutes", color="Category", 
+                         title="Category vs Total Min", height=chart_height, color_discrete_sequence=colors)
+        color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Scatter Chart":
-        fig = px.scatter(df, x="Total Minutes", y="Category", text="Total Minutes", title="Category vs Total Min", height=chart_height, color_discrete_sequence=[primary_color])
+        fig = px.scatter(df, x="Total Minutes", y="Category", text="Total Minutes", title="Category vs Total Min", 
+                         height=chart_height, color_discrete_sequence=[primary_color])
     elif chart_type == "Box Plot":
         fig = px.box(df, x="Total Minutes" if orientation=="Horizontal" else "Category", y="Category" if orientation=="Horizontal" else "Total Minutes",
                      title="Category vs Total Min", height=chart_height, color_discrete_sequence=[primary_color])
     elif chart_type == "Histogram":
-        fig = px.histogram(df, x="Total Minutes" if orientation=="Horizontal" else "Category", title="Distribution", height=chart_height, color_discrete_sequence=[primary_color])
+        fig = px.histogram(df, x="Total Minutes" if orientation=="Horizontal" else "Category", title="Distribution", 
+                           height=chart_height, color_discrete_sequence=[primary_color])
     elif chart_type == "Pie Chart":
-        fig = px.pie(df, names="Category", values="Total Minutes", title="Category Distribution", height=chart_height)
+        df_sorted = df.sort_values("Total Minutes", ascending=False)  # 按 Total Minutes 降序排序，與圖表一致
+        fig = px.pie(df_sorted, names="Category", values="Total Minutes", title="Category Distribution", 
+                     height=chart_height, color_discrete_sequence=colors)
+        color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"])}
     elif chart_type == "Sunburst Chart":
         fig = px.sunburst(df, path=["Category"], values="Total Minutes", title="Category vs Total Min", height=chart_height)
     elif chart_type == "Tree Chart":
         fig = px.treemap(df, path=["Category"], values="Total Minutes", title="Category vs Total Min", height=chart_height)
 
     if fig:
+        # 根據圖表類型決定是否顯示內建 Legend
+        show_legend = chart_type not in ["Pie Chart", "Bubble Chart"]
         fig.update_layout(
             title=dict(text=fig.layout.title.text, x=0.5, xanchor="center"),
-            margin=dict(l=20, r=20, t=50, b=20),
-            legend=dict(font=dict(size=max(22, chart_height // 50)))
+            margin=dict(l=20, r=20, t=50, b=50),
+            showlegend=show_legend,
+            legend=dict(
+                orientation="v",
+                yanchor="auto",
+                y=1,
+                xanchor="auto",
+                x=1,
+                font=dict(size=max(10, chart_height // 30))
+            )
         )
         
         # 響應式佈局容器
@@ -196,43 +247,27 @@ if os.path.exists("habits.csv"):
             st.markdown('<div class="grid-container">', unsafe_allow_html=True)
             col1, col2 = st.columns(2)
             with col1:
+                st.markdown('<div class="chart-wrapper">', unsafe_allow_html=True)
                 st.plotly_chart(fig, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
             if show_table:
                 with col2:
-                    st.caption("Data shown on the chart")
-                    df_with_index = df.copy()
-                    df_with_index.insert(0, "No.", range(1, len(df_with_index) + 1))
-                    
-                    # 自定義表格樣式（暗色主題）
-                    dark_table_css = """
-                    <style>
-                    .styled-table {
-                        width: 100%;
-                        border-collapse: separate;
-                        border-spacing: 0;
-                        border: 1px solid #444;
-                        border-radius: 10px;
-                        overflow: hidden;
-                        font-family: 'Segoe UI', sans-serif;
-                    }
-                    .styled-table th, .styled-table td {
-                        text-align: center;
-                        padding: 10px;
-                    }
-                    .styled-table th {
-                        background-color: #333;
-                        color: #ddd;
-                        font-weight: 600;
-                    }
-                    .styled-table td {
-                        background-color: #1e1e1e;
-                        color: #ddd;
-                    }
-                    </style>
-                    """
-                    st.markdown(dark_table_css, unsafe_allow_html=True)
-                    html_table = df_with_index.to_html(index=False).replace("<table", "<table class='styled-table' ")
-                    st.markdown(html_table, unsafe_allow_html=True)
+                    st.markdown('<div class="table-wrapper">', unsafe_allow_html=True)
+                    if chart_type in ["Pie Chart", "Bubble Chart"]:
+                        # 為 Pie Chart 和 Bubble Chart 顯示專屬表格
+                        legend_df = df.sort_values("Total Minutes", ascending=False)  # 與圖表排序一致
+                        legend_df = legend_df[["Category", "Total Minutes"]].copy()
+                        legend_df.insert(0, "Color", ["<span style='color:{}; font-size: 24px; display: inline-block; width: 20px; height: 20px; border-radius: 50%;'>{}</span>".format(color_map.get(cat, '#000000'), '●') for cat in legend_df["Category"]])
+                        legend_html = legend_df.to_html(index=False, escape=False).replace("<table", "<table class='legend-table' ")
+                        st.markdown(legend_html, unsafe_allow_html=True)
+                    else:
+                        # 其他圖表顯示標準表格
+                        st.caption("Data shown on the chart")
+                        df_with_index = df.copy()
+                        df_with_index.insert(0, "No.", range(1, len(df_with_index) + 1))
+                        html_table = df_with_index.to_html(index=False).replace("<table", "<table class='styled-table' ")
+                        st.markdown(html_table, unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 else:
     st.info("I'm hungry. You can feed me data.")
