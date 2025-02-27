@@ -1,10 +1,18 @@
 import streamlit as st
 
-st.checkbox("勾選框") # 參數中輸入會返回布林值
-st.button("按鈕") # 參數中輸入會返回布林值
-st.selectbox("選單列表", ("選項1", "選項2", "選項3")) # 第一個參數：列表名稱，第二個參數：選項
-st.multiselect("選單列表（可多選）", ("選項1", "選項2", "選項3")) # 第一個參數：列表名稱，第二個參數：選項，支持多選
-st.radio("單選按鈕", ("選項1", "選項2", "選項3")) # 第一個參數：列表名稱（顯示在選項組上方），第二個參數：選項
-# 以下顯示在側邊欄
-st.sidebar.text_input("文字輸入框") # 參數中可以傳遞輸入內容
-st.sidebar.text_area("文本區域") # 參數中可以傳遞輸入內容
+st.title("動態獲取瀏覽器視窗大小")
+
+html_code = """
+<script>
+function sendWindowSize() {
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+    document.getElementById("window-size").innerText = `當前視窗大小：${width} x ${height}`;
+}
+window.onload = sendWindowSize;
+window.onresize = sendWindowSize;
+</script>
+<div id="window-size">正在獲取視窗大小...</div>
+"""
+# 將高度從 50 提高到 150
+st.components.v1.html(html_code, height=150)

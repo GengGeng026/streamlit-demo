@@ -28,6 +28,9 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 API_TOKEN = os.getenv("NOTION_API_KEY")
 DATABASE_ID = os.getenv("NOTION_HABITS_DATABASE_ID")
 
+# 定義主題顏色，請根據你的 Streamlit Active Theme 調整
+primary_color = "#6d46f9"
+
 # 查询参数：过滤 Total min Par > 0，排序依据公式属性 Parent or Sub 降序
 query_payload = {
     "sorts": [
@@ -121,8 +124,10 @@ if "update_clicked" not in st.session_state:
 
 # 侧边栏控件：图表类型、图表高度、是否显示数据表
 chart_type = st.sidebar.selectbox("Type", [
-    "Line Chart", "Bar Chart", "Scatter Chart", "Tree Chart", "Pie Chart", 
-    "Bubble Chart", "Box Plot", "Histogram", "Sunburst Chart"
+    "Line Chart", "Bar Chart", "Box Plot", "Histogram",
+    "Scatter Chart", "Bubble Chart",
+    "Pie Chart", "Sunburst Chart",
+    "Tree Chart"
 ], index=0)
 
 if chart_type in ["Bar Chart", "Box Plot", "Histogram"]:
@@ -167,41 +172,50 @@ if os.path.exists("habits.csv"):
     df = pd.read_csv("habits.csv")
     
     fig = None
-    if chart_type == "Bar Chart":
-        if orientation == "Horizontal":
-            fig = px.bar(df, x="Total Minutes", y="Category", text="Total Minutes", title="Category    VS    Total Min", height=chart_height)
-        else:
-            fig = px.bar(df, x="Category", y="Total Minutes", text="Total Minutes", title="Category    VS    Total Min", height=chart_height)
-    elif chart_type == "Scatter Chart":
-        fig = px.scatter(df, x="Total Minutes", y="Category", text="Total Minutes", title="Category    VS    Total Min", height=chart_height)
-    elif chart_type == "Tree Chart":
-        fig = px.treemap(df, path=["Category"], values="Total Minutes", title="Category   VS   Total Mins", height=chart_height)
-    elif chart_type == "Line Chart":
+    if chart_type == "Line Chart":
         if line_mode == "Line Chart":
-            fig = px.line(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear", title="Category    VS    Total Min", height=chart_height)
+            fig = px.line(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear", title="Category    VS    Total Min", height=chart_height,
+                         color_discrete_sequence=[primary_color])
         else:
-            fig = px.area(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear", title="Category    VS    Total Min", height=chart_height)
-    elif chart_type == "Pie Chart":
-        fig = px.pie(df, names="Category", values="Total Minutes", title="Category Distribution", height=chart_height)
+            fig = px.area(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear", title="Category    VS    Total Min", height=chart_height,
+                         color_discrete_sequence=[primary_color])
+    elif chart_type == "Bar Chart":
+        if orientation == "Horizontal":
+            fig = px.bar(df, x="Total Minutes", y="Category", text="Total Minutes", title="Category    VS    Total Min", height=chart_height,
+                         color_discrete_sequence=[primary_color])
+        else:
+            fig = px.bar(df, x="Category", y="Total Minutes", text="Total Minutes", title="Category    VS    Total Min", height=chart_height,
+                         color_discrete_sequence=[primary_color])
     elif chart_type == "Bubble Chart":
         fig = px.scatter(df, x="Category", y="Total Minutes", size="Total Minutes", color="Category", title="Category    VS    Total Min", height=chart_height)
+    elif chart_type == "Scatter Chart":
+        fig = px.scatter(df, x="Total Minutes", y="Category", text="Total Minutes", title="Category    VS    Total Min", height=chart_height,
+                         color_discrete_sequence=[primary_color])
     elif chart_type == "Box Plot":
         if orientation == "Horizontal":
-            fig = px.box(df, x="Total Minutes", y="Category", title="Category    VS    Total Min", height=chart_height)
+            fig = px.box(df, x="Total Minutes", y="Category", title="Category    VS    Total Min", height=chart_height,
+                         color_discrete_sequence=[primary_color])
         else:
-            fig = px.box(df, x="Category", y="Total Minutes", title="Category    VS    Total Min", height=chart_height)
+            fig = px.box(df, x="Category", y="Total Minutes", title="Category    VS    Total Min", height=chart_height,
+                         color_discrete_sequence=[primary_color])
     elif chart_type == "Histogram":
         if orientation == "Horizontal":
-            fig = px.histogram(df, x="Total Minutes", title="Total Minutes Distribution", height=chart_height)
+            fig = px.histogram(df, x="Total Minutes", title="Total Minutes Distribution", height=chart_height,
+                         color_discrete_sequence=[primary_color])
         else:
-            fig = px.histogram(df, x="Category", title="Category Distribution", height=chart_height)
+            fig = px.histogram(df, x="Category", title="Category Distribution", height=chart_height,
+                         color_discrete_sequence=[primary_color])
+    elif chart_type == "Pie Chart":
+        fig = px.pie(df, names="Category", values="Total Minutes", title="Category Distribution", height=chart_height)
     elif chart_type == "Sunburst Chart":
         fig = px.sunburst(df, path=["Category"], values="Total Minutes", title="Category    VS    Total Min", height=chart_height)
+    elif chart_type == "Tree Chart":
+        fig = px.treemap(df, path=["Category"], values="Total Minutes", title="Category   VS   Total Mins", height=chart_height)
     else:
         fig = None
 
     if fig:
-        legend_font_size = max(22, chart_height // 20)  # 根据图表高度计算字体大小
+        legend_font_size = max(22, chart_height // 50)  # 根据图表高度计算字体大小
         fig.update_layout(
             title=dict(
                 text=fig.layout.title.text,
