@@ -10,10 +10,10 @@ import random
 import logging
 import time  # 用于延时
 
-# 設置頁面為寬屏模式，讓內容充分利用窗口寬度
+# 設置頁面為寬屏模式
 st.set_page_config(layout="wide")
 
-# 自定義 CSS：減少頂部空白並實現響應式佈局
+# 插入自定義 CSS 實現響應式佈局
 st.markdown(
     """
     <style>
@@ -21,22 +21,15 @@ st.markdown(
     .block-container {
         padding-top: 1rem;
     }
-    /* 響應式佈局：當窗口寬度大於 1000px 時圖表和表格並排，否則上下堆疊 */
-    @media (min-width: 1000px) {
-        .chart-container, .table-container {
-            width: 50% !important;
-            float: left;
-        }
+    /* 響應式佈局：寬屏時並排，窄屏時堆疊 */
+    .responsive-container {
+        display: flex;
+        flex-direction: row;
     }
     @media (max-width: 999px) {
-        .chart-container, .table-container {
-            width: 100% !important;
-            float: none;
+        .responsive-container {
+            flex-direction: column;
         }
-    }
-    /* 確保圖表和表格高度一致 */
-    .chart-container, .table-container {
-        height: 100%;
     }
     </style>
     """,
@@ -249,16 +242,18 @@ if os.path.exists("habits.csv"):
                 font=dict(size=legend_font_size)
             )
         )
-        # 使用容器包裹圖表和表格，實現響應式佈局
-        with st.container():
-            # 圖表區域：用 div 標籤包裹並應用 chart-container 樣式
-            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        
+        # 開始響應式容器
+        st.markdown('<div class="responsive-container">', unsafe_allow_html=True)
+        
+        # 使用 st.columns 實現並排佈局
+        col1, col2 = st.columns(2)
+        
+        with col1:
             st.plotly_chart(fig, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            if show_table:
-                # 表格區域：用 div 標籤包裹並應用 table-container 樣式
-                st.markdown('<div class="table-container">', unsafe_allow_html=True)
+        
+        if show_table:
+            with col2:
                 st.caption("Data shown on the chart")
                 df_with_index = df.copy()
                 df_with_index.insert(0, "No.", range(1, len(df_with_index) + 1))
@@ -299,7 +294,9 @@ if os.path.exists("habits.csv"):
                 html_table = df_with_index.to_html(index=False)
                 html_table = html_table.replace("<table", "<table class='styled-table' style='width:100%;' ")
                 st.markdown(html_table, unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
+        
+        # 結束響應式容器
+        st.markdown('</div>', unsafe_allow_html=True)
 
 else:
     st.info("I'm hungry. You can feed me data.")
