@@ -10,12 +10,33 @@ import random
 import logging
 import time  # 用于延时
 
+# 設置頁面為寬屏模式，讓內容充分利用窗口寬度
+st.set_page_config(layout="wide")
+
+# 自定義 CSS：減少頂部空白並實現響應式佈局
 st.markdown(
     """
     <style>
-    /* 减少主内容区域顶部空白 */
+    /* 減少主內容區域頂部空白 */
     .block-container {
         padding-top: 1rem;
+    }
+    /* 響應式佈局：當窗口寬度大於 1000px 時圖表和表格並排，否則上下堆疊 */
+    @media (min-width: 1000px) {
+        .chart-container, .table-container {
+            width: 50% !important;
+            float: left;
+        }
+    }
+    @media (max-width: 999px) {
+        .chart-container, .table-container {
+            width: 100% !important;
+            float: none;
+        }
+    }
+    /* 確保圖表和表格高度一致 */
+    .chart-container, .table-container {
+        height: 100%;
     }
     </style>
     """,
@@ -24,14 +45,14 @@ st.markdown(
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
-# 从环境变量中获取 Notion API Token 与数据库 ID
+# 從環境變量中獲取 Notion API Token 與數據庫 ID
 API_TOKEN = os.getenv("NOTION_API_KEY")
 DATABASE_ID = os.getenv("NOTION_HABITS_DATABASE_ID")
 
 # 定義主題顏色，請根據你的 Streamlit Active Theme 調整
 primary_color = "#6d46f9"
 
-# 查询参数：过滤 Total min Par > 0，排序依据公式属性 Parent or Sub 降序
+# 查詢參數：過濾 Total min Par > 0，排序依據公式屬性 Parent or Sub 降序
 query_payload = {
     "sorts": [
         {
@@ -118,11 +139,11 @@ async def get_valid_parent_habits():
 
 st.title("Hi, GengGeng")
 
-# 初始化更新状态
+# 初始化更新狀態
 if "update_clicked" not in st.session_state:
     st.session_state["update_clicked"] = False
 
-# 侧边栏控件：图表类型、图表高度、是否显示数据表
+# 側邊欄控件：圖表類型、圖表高度、是否顯示數據表
 chart_type = st.sidebar.selectbox("Type", [
     "Line Chart", "Bar Chart", "Box Plot", "Histogram",
     "Scatter Chart", "Bubble Chart",
@@ -145,19 +166,19 @@ else:
 chart_height = st.sidebar.slider("Height", min_value=300, max_value=720, value=360, help="Slide me to the desired height")
 show_table = st.sidebar.checkbox("Show Table", value=True)
 
-# 创建一个按钮占位符
+# 創建一個按鈕占位符
 button_placeholder = st.empty()
 
-# 仅当不在更新中时显示 Update Data 按钮
+# 僅當不在更新中時顯示 Feed 按鈕
 if "updating" not in st.session_state:
     st.session_state["updating"] = False
 
 if not st.session_state["updating"]:
     if button_placeholder.button("Feed"):
         st.session_state["updating"] = True
-        button_placeholder.empty()  # 让按钮立即消失
+        button_placeholder.empty()  # 讓按鈕立即消失
 
-# 当处于更新状态时，显示 spinner 并更新数据
+# 當處於更新狀態時，顯示 spinner 並更新數據
 if st.session_state["updating"]:
     with st.spinner("Baking it now"):
         valid = asyncio.run(get_valid_parent_habits())
@@ -165,7 +186,8 @@ if st.session_state["updating"]:
         df.to_csv("habits.csv", index=False)
         msg_placeholder = st.empty()
         msg_placeholder.success("Data updated successfully!")
-        time.sleep(3)  # 模拟等待3秒（注意：这会阻塞页面刷新）\n        msg_placeholder.empty()
+        time.sleep(3)  # 模擬等待3秒（注意：這會阻塞頁面刷新）
+        msg_placeholder.empty()
     st.session_state["updating"] = False
 
 if os.path.exists("habits.csv"):
@@ -215,7 +237,7 @@ if os.path.exists("habits.csv"):
         fig = None
 
     if fig:
-        legend_font_size = max(22, chart_height // 50)  # 根据图表高度计算字体大小
+        legend_font_size = max(22, chart_height // 50)  # 根據圖表高度計算字體大小
         fig.update_layout(
             title=dict(
                 text=fig.layout.title.text,
@@ -227,51 +249,57 @@ if os.path.exists("habits.csv"):
                 font=dict(size=legend_font_size)
             )
         )
-        st.plotly_chart(fig, use_container_width=True)
-        
-    if show_table:
-        st.caption("Data shown on the chart")
-        # 在插入序号列之前复制 DataFrame
-        df_with_index = df.copy()
-        df_with_index.insert(0, "No.", range(1, len(df_with_index) + 1))
-        
-        # 定义自定义 CSS，用于暗色主题下的表格样式
-        dark_table_css = """
-        <style>
-        .styled-table {
-            width: 100% !important;
-            margin: 0 auto;
-            border-collapse: separate;
-            border-spacing: 0;
-            border: 1px solid #444;
-            border-radius: 10px;
-            overflow: hidden;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        .styled-table th, .styled-table td {
-            text-align: center !important;
-            padding: 8px 12px;
-        }
-        /* 表头使用稍微深一点的背景 */
-        .styled-table th {
-            background-color: #333;
-            color: #ddd;
-            font-weight: 600;
-        }
-        /* 表格数据区域全使用统一的暗色背景 */
-        .styled-table td {
-            background-color: #1e1e1e;
-            color: #ddd;
-        }
-        </style>
-        """
-        st.markdown(dark_table_css, unsafe_allow_html=True)
-        
-        # 生成 HTML 表格，添加样式类
-        html_table = df_with_index.to_html(index=False)
-        # 强制给 <table> 标签加上 class 和内联样式保证宽度100%
-        html_table = html_table.replace("<table", "<table class='styled-table' style='width:100%;' ")
-        st.markdown(html_table, unsafe_allow_html=True)
+        # 使用容器包裹圖表和表格，實現響應式佈局
+        with st.container():
+            # 圖表區域：用 div 標籤包裹並應用 chart-container 樣式
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+            st.plotly_chart(fig, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            if show_table:
+                # 表格區域：用 div 標籤包裹並應用 table-container 樣式
+                st.markdown('<div class="table-container">', unsafe_allow_html=True)
+                st.caption("Data shown on the chart")
+                df_with_index = df.copy()
+                df_with_index.insert(0, "No.", range(1, len(df_with_index) + 1))
+                
+                # 定義自定義 CSS，用於暗色主題下的表格樣式
+                dark_table_css = """
+                <style>
+                .styled-table {
+                    width: 100% !important;
+                    margin: 0 auto;
+                    border-collapse: separate;
+                    border-spacing: 0;
+                    border: 1px solid #444;
+                    border-radius: 10px;
+                    overflow: hidden;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                }
+                .styled-table th, .styled-table td {
+                    text-align: center !important;
+                    padding: 8px 12px;
+                }
+                /* 表頭使用稍微深一點的背景 */
+                .styled-table th {
+                    background-color: #333;
+                    color: #ddd;
+                    font-weight: 600;
+                }
+                /* 表格數據區域全使用統一的暗色背景 */
+                .styled-table td {
+                    background-color: #1e1e1e;
+                    color: #ddd;
+                }
+                </style>
+                """
+                st.markdown(dark_table_css, unsafe_allow_html=True)
+                
+                # 生成 HTML 表格並應用樣式
+                html_table = df_with_index.to_html(index=False)
+                html_table = html_table.replace("<table", "<table class='styled-table' style='width:100%;' ")
+                st.markdown(html_table, unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
 
 else:
     st.info("I'm hungry. You can feed me data.")
