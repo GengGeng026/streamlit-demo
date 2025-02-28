@@ -62,10 +62,10 @@ st.markdown(
         border-collapse: separate;
         border-spacing: 0;
         border: 1px solid #444;
-        border-radius: 10px;
+        border-radius: 15px;
         overflow-y: auto; /* 僅垂直滾動 */
         font-family: 'Segoe UI', sans-serif;
-        font-size: 16px; /* 增大字體 */
+        font-size: 20px; /* 增大字體 */
         background-color: rgba(1, 1, 1, 1);
     }
     .legend-table th, .legend-table td, .styled-table th, .styled-table td {
@@ -261,7 +261,7 @@ if os.path.exists("habits.csv"):
                       title="Category vs Total Min", height=500, 
                       color_discrete_sequence=[primary_color]) if line_mode == "Line Chart" else \
               px.area(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear",
-                      title="Category vs Total Min", height=500, 
+                      title="Category vs Total Min", height=650, 
                       color_discrete_sequence=[primary_color])
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df["Category"].unique())}
     elif chart_type == "Bar Chart":
