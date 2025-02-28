@@ -9,10 +9,10 @@ import logging
 import time
 import streamlit.components.v1 as components
 
-# 設置頁面為寬屏模式（必須是第一個 Streamlit 命令）
-st.set_page_config(layout="wide")
+# 設置頁面為寬屏模式並初始收起側邊欄（必須是第一個 Streamlit 命令）
+st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
-# 自定義 CSS 實現響應式佈局與表格樣式統一
+# 自定義 CSS 實現響應式佈局與表格樣式統一，並控制側邊欄
 st.markdown(
     """
     <style>
@@ -79,31 +79,32 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# JavaScript 腳本：使用輪詢確保側邊欄收起
-collapse_sidebar_script = """
+# JavaScript 腳本：監聽 < 按鈕並完全收起側邊欄
+collapse_script = """
 <script>
-    function collapseSidebar() {
-        const sidebarCollapseBtn = document.querySelector('button[aria-label="Collapse sidebar"]');
-        if (sidebarCollapseBtn) {
-            sidebarCollapseBtn.click();
-        } else {
-            // 若按鈕尚未加載，延遲重試
-            setTimeout(collapseSidebar, 100);
-        }
-    }
-    // 在頁面加載後執行
     document.addEventListener("DOMContentLoaded", function() {
-        collapseSidebar();
+        const collapseBtn = document.querySelector('button[aria-label="Collapse sidebar"]');
+        if (collapseBtn) {
+            collapseBtn.addEventListener('click', function(event) {
+                event.preventDefault(); // 阻止 Streamlit 默認半隱藏行為
+                event.stopPropagation(); // 阻止事件冒泡
+                const sidebar = document.querySelector('[data-testid="stSidebar"]');
+                sidebar.style.setProperty('width', '0px', 'important');
+                sidebar.style.setProperty('min-width', '0px', 'important');
+                sidebar.style.setProperty('padding', '0px', 'important');
+                sidebar.style.setProperty('visibility', 'hidden', 'important');
+                sidebar.style.setProperty('overflow', 'hidden', 'important');
+                document.querySelector('[data-testid="stSidebarNav"]').style.setProperty('display', 'none', 'important');
+                const content = document.querySelector('.stSidebar > div');
+                if (content) content.style.setProperty('display', 'none', 'important');
+                // 重置為 collapsed 狀態，保留展開箭頭
+                sidebar.classList.add('st-sidebar--collapsed');
+            });
+        }
     });
-    // 額外保險：延遲執行一次
-    setTimeout(collapseSidebar, 500);
 </script>
 """
-
-# 初始化狀態，並注入收起腳本
-if "first_load" not in st.session_state:
-    st.session_state["first_load"] = True
-    components.html(collapse_sidebar_script, height=0)
+components.html(collapse_script, height=0)
 
 # 設置日誌
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -196,8 +197,9 @@ if "show_table" not in st.session_state:
 
 # 側邊欄控件
 chart_type = st.sidebar.selectbox("Type", [
+    "Pie Chart", "Sunburst Chart", 
     "Line Chart", "Bar Chart", "Box Plot", "Histogram",
-    "Scatter Chart", "Bubble Chart", "Pie Chart", "Sunburst Chart", "Tree Chart"
+    "Scatter Chart", "Bubble Chart", "Tree Chart"
 ], index=0)
 
 orientation = st.sidebar.radio("Direction", ["Vertical", "Horizontal"], index=1) if chart_type in ["Bar Chart", "Box Plot", "Histogram"] else None
