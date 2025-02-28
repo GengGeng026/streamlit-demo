@@ -213,12 +213,13 @@ if "show_table" not in st.session_state:
 
 # 側邊欄控件
 chart_type = st.sidebar.selectbox("Type", [
+    "Bar Chart", "Box Plot",
     "Pie Chart", "Sunburst Chart", 
-    "Line Chart", "Bar Chart", "Box Plot", "Histogram",
+    "Line Chart",  "Histogram",
     "Scatter Chart", "Bubble Chart", "Tree Chart"
 ], index=0)
 
-orientation = st.sidebar.radio("Direction", ["Vertical", "Horizontal"], index=1) if chart_type in ["Bar Chart", "Box Plot", "Histogram"] else None
+orientation = st.sidebar.radio("Direction", ["Vertical", "Horizontal"], index=0) if chart_type in ["Bar Chart", "Box Plot", "Histogram"] else None
 line_mode = st.sidebar.radio("Mode", ["Area Chart", "Line Chart"], index=0) if chart_type == "Line Chart" else None
 curve_option = st.sidebar.radio("Curve", ["Curved", "Straight"], index=0) if chart_type == "Line Chart" else None
 
