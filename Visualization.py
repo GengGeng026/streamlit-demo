@@ -18,7 +18,7 @@ st.markdown(
     <style>
     /* 主容器預留邊距 */
     .block-container {
-        padding: 0.1rem 15rem 50rem 15rem; /* 四周 1rem 邊距 */
+        padding: 0.1rem 10rem 50rem 10rem; /* 四周 1rem 邊距 */
         margin: 0;
         max-width: 100%;
         min-height: 100vh; /* 確保填滿視口 */
@@ -27,7 +27,8 @@ st.markdown(
     .grid-container {
         display: grid;
         grid-template-columns: repeat(2, 1fr); /* 寬屏時兩列 */
-        gap: 15px; /* 增加間距 */
+        column-gap: 30px; /* 調整數據圖與表格之間的間距 */
+        row-gap: 15px; /* 保持行間距，若有多行 */
         align-items: stretch; /* 確保子元素高度一致 */
         width: calc(100% - 2rem); /* 左右各留 1rem */
         margin: 0 auto; /* 居中 */
