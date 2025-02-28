@@ -16,9 +16,12 @@ st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 st.markdown(
     """
     <style>
-    /* 減少頂部空白 */
+    /* 主容器預留邊距 */
     .block-container {
-        padding-top: 1rem;
+        padding: 1rem; /* 四周 1rem 邊距 */
+        margin: 0;
+        max-width: 100%;
+        min-height: 100vh; /* 確保填滿視口 */
     }
     /* 響應式 Grid 佈局 */
     .grid-container {
@@ -26,6 +29,8 @@ st.markdown(
         grid-template-columns: repeat(2, 1fr); /* 寬屏時兩列 */
         gap: 15px; /* 增加間距 */
         align-items: stretch; /* 確保子元素高度一致 */
+        width: calc(100% - 2rem); /* 左右各留 1rem */
+        margin: 0 auto; /* 居中 */
     }
     @media (max-width: 1000px) { /* 窄屏斷點為 1000px */
         .grid-container {
@@ -48,31 +53,35 @@ st.markdown(
     /* 當表格顯示時，強制同步高度 */
     .grid-container:not(.no-table) .chart-wrapper,
     .grid-container:not(.no-table) .table-wrapper {
-        height: 400px; /* 統一基準高度，適應大多數圖表 */
+        height: 80vh; /* 放大至 80% 視口高度 */
     }
-    /* 統一表格樣式（適用於 .legend-table 和 .styled-table） */
+    /* 統一表格樣式 */
     .legend-table, .styled-table {
         width: 100%;
+        height: 80vh; /* 與圖表一致 */
         border-collapse: separate;
         border-spacing: 0;
-        border: 1px solid #444; /* 統一邊框 */
-        border-radius: 10px; /* 統一圓角 */
-        overflow: hidden;
+        border: 1px solid #444;
+        border-radius: 10px;
+        overflow-y: auto; /* 僅垂直滾動 */
         font-family: 'Segoe UI', sans-serif;
-        font-size: 14px; /* 統一字體大小 */
-        background-color: rgba(1, 1, 1, 1); /* 統一背景 */
+        font-size: 16px; /* 增大字體 */
+        background-color: rgba(1, 1, 1, 1);
     }
     .legend-table th, .legend-table td, .styled-table th, .styled-table td {
         text-align: center;
-        padding: 0.2em; /* 適中內邊距，避免過矮 */
+        padding: 0.1em; /* 增大內邊距 */
     }
     .legend-table th, .styled-table th {
-        background-color: rgba(51, 51, 51, 0.7); /* 統一表頭背景 */
+        background-color: rgba(51, 51, 51, 0.7);
         color: #ddd;
         font-weight: 600;
     }
     .legend-table td, .styled-table td {
         color: #ddd;
+    }
+    h1 {
+        margin-bottom: 0.5rem; /* 標題底部留少量空間 */
     }
     </style>
     """,
