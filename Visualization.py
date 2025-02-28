@@ -249,51 +249,51 @@ if os.path.exists("habits.csv"):
     if chart_type == "Pie Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=False)
         fig = px.pie(df_sorted, names="Category", values="Total Minutes", title="Category Distribution", 
-                     height=400, color_discrete_sequence=colors)
+                     height=500, color_discrete_sequence=colors)
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Sunburst Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=False)
         fig = px.sunburst(df_sorted, path=["Category"], values="Total Minutes", title="Category vs Total Min", 
-                          height=400, color_discrete_sequence=colors)
+                          height=500, color_discrete_sequence=colors)
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Line Chart":
         fig = px.line(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear",
-                      title="Category vs Total Min", height=400, 
+                      title="Category vs Total Min", height=500, 
                       color_discrete_sequence=[primary_color]) if line_mode == "Line Chart" else \
               px.area(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear",
-                      title="Category vs Total Min", height=400, 
+                      title="Category vs Total Min", height=500, 
                       color_discrete_sequence=[primary_color])
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df["Category"].unique())}
     elif chart_type == "Bar Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=True)
         fig = px.bar(df_sorted, x="Total Minutes" if orientation=="Horizontal" else "Category", y="Category" if orientation=="Horizontal" else "Total Minutes",
                      text="Total Minutes", title="Category vs Total Min", 
-                     height=400, color_discrete_sequence=[primary_color])
+                     height=500, color_discrete_sequence=[primary_color])
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Bubble Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=True)
         fig = px.scatter(df_sorted, x="Category", y="Total Minutes", size="Total Minutes", color="Category", 
-                         title="Category vs Total Min", height=400, 
+                         title="Category vs Total Min", height=500, 
                          color_discrete_sequence=colors)
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Scatter Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=True)
         fig = px.scatter(df_sorted, x="Total Minutes", y="Category", text="Total Minutes", title="Category vs Total Min", 
-                         height=400, color_discrete_sequence=[primary_color])
+                         height=500, color_discrete_sequence=[primary_color])
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Box Plot":
         df_sorted = df.sort_values("Total Minutes", ascending=True)
         fig = px.box(df_sorted, x="Total Minutes" if orientation=="Horizontal" else "Category", y="Category" if orientation=="Horizontal" else "Total Minutes",
-                     title="Category vs Total Min", height=400, 
+                     title="Category vs Total Min", height=500, 
                      color_discrete_sequence=[primary_color])
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Histogram":
         fig = px.histogram(df, x="Total Minutes" if orientation=="Horizontal" else "Category", title="Distribution", 
-                           height=400, color_discrete_sequence=[primary_color])
+                           height=500, color_discrete_sequence=[primary_color])
     elif chart_type == "Tree Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=False)
         fig = px.treemap(df_sorted, path=["Category"], values="Total Minutes", title="Category vs Total Min", 
-                         height=400, color_discrete_sequence=colors)
+                         height=500, color_discrete_sequence=colors)
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
 
     if fig:
