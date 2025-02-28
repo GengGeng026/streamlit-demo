@@ -12,7 +12,7 @@ import streamlit.components.v1 as components
 # 設置頁面為寬屏模式並初始收起側邊欄（必須是第一個 Streamlit 命令）
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
-# 自定義 CSS 實現響應式佈局與表格樣式統一，並控制側邊欄
+# 自定義 CSS 實現響應式佈局與表格樣式統一
 st.markdown(
     """
     <style>
@@ -86,8 +86,8 @@ collapse_script = """
         const collapseBtn = document.querySelector('button[aria-label="Collapse sidebar"]');
         if (collapseBtn) {
             collapseBtn.addEventListener('click', function(event) {
-                event.preventDefault(); // 阻止 Streamlit 默認半隱藏行為
-                event.stopPropagation(); // 阻止事件冒泡
+                event.preventDefault();
+                event.stopPropagation();
                 const sidebar = document.querySelector('[data-testid="stSidebar"]');
                 sidebar.style.setProperty('width', '0px', 'important');
                 sidebar.style.setProperty('min-width', '0px', 'important');
@@ -97,7 +97,6 @@ collapse_script = """
                 document.querySelector('[data-testid="stSidebarNav"]').style.setProperty('display', 'none', 'important');
                 const content = document.querySelector('.stSidebar > div');
                 if (content) content.style.setProperty('display', 'none', 'important');
-                // 重置為 collapsed 狀態，保留展開箭頭
                 sidebar.classList.add('st-sidebar--collapsed');
             });
         }
@@ -136,7 +135,7 @@ async def smart_retry(func, *args, **kwargs):
         try:
             return await func(*args, **kwargs)
         except aiohttp.ClientResponseError as e:
-            if e.status in {504, 502}:
+            if e.status in [504, 502]:
                 logging.warning(f"Server error {e.status} on attempt {attempt+1}/{MAX_RETRIES}")
             elif e.status == 429:
                 logging.warning(f"Rate limit exceeded on attempt {attempt+1}/{MAX_RETRIES}")
@@ -187,13 +186,20 @@ async def get_valid_parent_habits():
 
 # -------------------- Streamlit App --------------------
 
+# 更新數據按鈕
+button_placeholder = st.empty()
+if not st.session_state.get("updating", False):
+    if button_placeholder.button("Refresh"):
+        st.session_state["updating"] = True
+        button_placeholder.empty()
+
 st.title("Hi, GengGeng")
 
 # 初始化狀態
 if "updating" not in st.session_state:
     st.session_state["updating"] = False
 if "show_table" not in st.session_state:
-    st.session_state["show_table"] = False  # 初始狀態為未勾選
+    st.session_state["show_table"] = True  # 初始狀態為勾選，顯示表格
 
 # 側邊欄控件
 chart_type = st.sidebar.selectbox("Type", [
@@ -203,29 +209,16 @@ chart_type = st.sidebar.selectbox("Type", [
 ], index=0)
 
 orientation = st.sidebar.radio("Direction", ["Vertical", "Horizontal"], index=1) if chart_type in ["Bar Chart", "Box Plot", "Histogram"] else None
-line_mode = st.sidebar.radio("Mode", ["Line Chart", "Area Chart"], index=0) if chart_type == "Line Chart" else None
+line_mode = st.sidebar.radio("Mode", ["Area Chart", "Line Chart"], index=0) if chart_type == "Line Chart" else None
 curve_option = st.sidebar.radio("Curve", ["Curved", "Straight"], index=0) if chart_type == "Line Chart" else None
 
 # 動態調整 Show Table 的標籤，並與狀態同步
 show_table_label = "Hide Table" if st.session_state["show_table"] else "Show Table"
-show_table = st.sidebar.checkbox(show_table_label, value=st.session_state["show_table"], key="show_table")
-
-# 僅當 Show Table 未勾選時顯示 Height Slider
-if not show_table:
-    chart_height = st.sidebar.slider("Height", min_value=300, max_value=720, value=360)
-else:
-    chart_height = None  # 當表格顯示時，不使用固定高度
-
-# 更新數據按鈕
-button_placeholder = st.empty()
-if not st.session_state["updating"]:
-    if button_placeholder.button("Feed"):
-        st.session_state["updating"] = True
-        button_placeholder.empty()
+st.sidebar.checkbox(show_table_label, key="show_table")  # 移除 value 參數
 
 # 數據更新邏輯
 if st.session_state["updating"]:
-    with st.spinner("Baking it now"):
+    with st.spinner("Fetching latest data . . ."):
         valid = asyncio.run(get_valid_parent_habits())
         df = pd.DataFrame(list(valid.items()), columns=["Category", "Total Minutes"])
         df.to_csv("habits.csv", index=False)
@@ -234,6 +227,7 @@ if st.session_state["updating"]:
         time.sleep(1)
         msg_placeholder.empty()
     st.session_state["updating"] = False
+    st.rerun()  # 添加刷新以恢復按鈕
 
 # 數據可視化
 if os.path.exists("habits.csv"):
@@ -243,51 +237,62 @@ if os.path.exists("habits.csv"):
     fig = None
     color_map = {}  # 在生成圖表時記錄顏色
     colors = px.colors.qualitative.Plotly  # 使用 Plotly 的預設顏色序列
-    if chart_type == "Line Chart":
+    if chart_type == "Pie Chart":
+        df_sorted = df.sort_values("Total Minutes", ascending=False)
+        fig = px.pie(df_sorted, names="Category", values="Total Minutes", title="Category Distribution", 
+                     height=400, color_discrete_sequence=colors)
+        color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
+    elif chart_type == "Sunburst Chart":
+        df_sorted = df.sort_values("Total Minutes", ascending=False)
+        fig = px.sunburst(df_sorted, path=["Category"], values="Total Minutes", title="Category vs Total Min", 
+                          height=400, color_discrete_sequence=colors)
+        color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
+    elif chart_type == "Line Chart":
         fig = px.line(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear",
-                      title="Category vs Total Min", height=chart_height if not show_table else 400, 
+                      title="Category vs Total Min", height=400, 
                       color_discrete_sequence=[primary_color]) if line_mode == "Line Chart" else \
               px.area(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear",
-                      title="Category vs Total Min", height=chart_height if not show_table else 400, 
+                      title="Category vs Total Min", height=400, 
                       color_discrete_sequence=[primary_color])
+        color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df["Category"].unique())}
     elif chart_type == "Bar Chart":
-        fig = px.bar(df, x="Total Minutes" if orientation=="Horizontal" else "Category", y="Category" if orientation=="Horizontal" else "Total Minutes",
-                     text="Total Minutes", title="Category vs Total Min", height=chart_height if not show_table else 400, 
-                     color_discrete_sequence=[primary_color])
+        df_sorted = df.sort_values("Total Minutes", ascending=True)
+        fig = px.bar(df_sorted, x="Total Minutes" if orientation=="Horizontal" else "Category", y="Category" if orientation=="Horizontal" else "Total Minutes",
+                     text="Total Minutes", title="Category vs Total Min", 
+                     height=400, color_discrete_sequence=[primary_color])
+        color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Bubble Chart":
-        df_sorted = df.sort_values("Total Minutes", ascending=False)  # 按 Total Minutes 降序排序，與圖表一致
+        df_sorted = df.sort_values("Total Minutes", ascending=True)
         fig = px.scatter(df_sorted, x="Category", y="Total Minutes", size="Total Minutes", color="Category", 
-                         title="Category vs Total Min", height=chart_height if not show_table else 400, 
+                         title="Category vs Total Min", height=400, 
                          color_discrete_sequence=colors)
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Scatter Chart":
-        fig = px.scatter(df, x="Total Minutes", y="Category", text="Total Minutes", title="Category vs Total Min", 
-                         height=chart_height if not show_table else 400, color_discrete_sequence=[primary_color])
+        df_sorted = df.sort_values("Total Minutes", ascending=True)
+        fig = px.scatter(df_sorted, x="Total Minutes", y="Category", text="Total Minutes", title="Category vs Total Min", 
+                         height=400, color_discrete_sequence=[primary_color])
+        color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Box Plot":
-        fig = px.box(df, x="Total Minutes" if orientation=="Horizontal" else "Category", y="Category" if orientation=="Horizontal" else "Total Minutes",
-                     title="Category vs Total Min", height=chart_height if not show_table else 400, 
+        df_sorted = df.sort_values("Total Minutes", ascending=True)
+        fig = px.box(df_sorted, x="Total Minutes" if orientation=="Horizontal" else "Category", y="Category" if orientation=="Horizontal" else "Total Minutes",
+                     title="Category vs Total Min", height=400, 
                      color_discrete_sequence=[primary_color])
+        color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Histogram":
         fig = px.histogram(df, x="Total Minutes" if orientation=="Horizontal" else "Category", title="Distribution", 
-                           height=chart_height if not show_table else 400, color_discrete_sequence=[primary_color])
-    elif chart_type == "Pie Chart":
-        df_sorted = df.sort_values("Total Minutes", ascending=False)  # 按 Total Minutes 降序排序，與圖表一致
-        fig = px.pie(df_sorted, names="Category", values="Total Minutes", title="Category Distribution", 
-                     height=chart_height if not show_table else 400, color_discrete_sequence=colors)
-        color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"])}
-    elif chart_type == "Sunburst Chart":
-        fig = px.sunburst(df, path=["Category"], values="Total Minutes", title="Category vs Total Min", 
-                          height=chart_height if not show_table else 400)
+                           height=400, color_discrete_sequence=[primary_color])
     elif chart_type == "Tree Chart":
-        fig = px.treemap(df, path=["Category"], values="Total Minutes", title="Category vs Total Min", 
-                         height=chart_height if not show_table else 400)
+        df_sorted = df.sort_values("Total Minutes", ascending=False)
+        fig = px.treemap(df_sorted, path=["Category"], values="Total Minutes", title="Category vs Total Min", 
+                         height=400, color_discrete_sequence=colors)
+        color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
 
     if fig:
         # 根據圖表類型決定是否顯示內建 Legend
-        show_legend = chart_type not in ["Pie Chart", "Bubble Chart"]
+        show_legend = chart_type not in ["Pie Chart", "Sunburst Chart", "Bubble Chart", "Tree Chart"]
         fig.update_layout(
             title=dict(text=fig.layout.title.text, x=0.5, xanchor="center"),
-            margin=dict(l=20, r=20, t=50, b=20 if show_table else 50),  # 表格顯示時減小底部空白
+            margin=dict(l=20, r=20, t=50, b=20 if st.session_state["show_table"] else 50),
             showlegend=show_legend,
             legend=dict(
                 orientation="v",
@@ -295,15 +300,15 @@ if os.path.exists("habits.csv"):
                 y=1,
                 xanchor="auto",
                 x=1,
-                font=dict(size=max(10, chart_height // 30) if chart_height else 12)
+                font=dict(size=12)
             )
         )
         
         # 響應式佈局容器
-        grid_class = "grid-container no-table" if not show_table else "grid-container"
+        grid_class = "grid-container no-table" if not st.session_state["show_table"] else "grid-container"
         with st.container():
             st.markdown(f'<div class="{grid_class}">', unsafe_allow_html=True)
-            if show_table:
+            if st.session_state["show_table"]:
                 col1, col2 = st.columns(2)
                 with col1:
                     st.markdown('<div class="chart-wrapper">', unsafe_allow_html=True)
@@ -311,17 +316,16 @@ if os.path.exists("habits.csv"):
                     st.markdown('</div>', unsafe_allow_html=True)
                 with col2:
                     st.markdown('<div class="table-wrapper">', unsafe_allow_html=True)
-                    st.caption("Data shown on the chart")  # 統一添加 caption
-                    if chart_type in ["Pie Chart", "Bubble Chart"]:
-                        # 為 Pie Chart 和 Bubble Chart 顯示專屬表格
-                        legend_df = df.sort_values("Total Minutes", ascending=False)  # 與圖表排序一致
+                    col1, col2 = st.columns([4, 3])
+                    if chart_type in ["Pie Chart", "Sunburst Chart", "Bubble Chart", "Tree Chart"]:
+                        legend_df = df.sort_values("Total Minutes", ascending=False)
                         legend_df = legend_df[["Category", "Total Minutes"]].copy()
                         legend_df.insert(0, "Color", ["<span style='color:{}; font-size: 15px; display: inline-block; width: 20px; height: 20px; border-radius: 50%;'>{}</span>".format(color_map.get(cat, '#000000'), '●') for cat in legend_df["Category"]])
                         legend_html = legend_df.to_html(index=False, escape=False).replace("<table", "<table class='legend-table' ")
                         st.markdown(legend_html, unsafe_allow_html=True)
                     else:
-                        # 其他圖表顯示標準表格
                         df_with_index = df.copy()
+                        df_with_index = df.sort_values("Total Minutes", ascending=False)
                         df_with_index.insert(0, "No.", range(1, len(df_with_index) + 1))
                         html_table = df_with_index.to_html(index=False).replace("<table", "<table class='styled-table' ")
                         st.markdown(html_table, unsafe_allow_html=True)
@@ -332,4 +336,4 @@ if os.path.exists("habits.csv"):
                 st.markdown('</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 else:
-    st.info("I'm hungry. You can feed me data.")
+    st.info("Try Refreshing the Data")
