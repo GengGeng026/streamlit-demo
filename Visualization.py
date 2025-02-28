@@ -18,7 +18,7 @@ st.markdown(
     <style>
     /* 主容器預留邊距 */
     .block-container {
-        padding: 0.5rem 10rem; /* 四周 1rem 邊距 */
+        padding: 0.1rem 15rem 50rem 15rem; /* 四周 1rem 邊距 */
         margin: 0;
         max-width: 100%;
         min-height: 100vh; /* 確保填滿視口 */
@@ -65,7 +65,7 @@ st.markdown(
         border-radius: 15px;
         overflow-y: auto; /* 僅垂直滾動 */
         font-family: 'Segoe UI', sans-serif;
-        font-size: 20px; /* 增大字體 */
+        font-size: 15px; /* 增大字體 */
         background-color: rgba(1, 1, 1, 1);
     }
     .legend-table th, .legend-table td, .styled-table th, .styled-table td {
@@ -249,7 +249,7 @@ if os.path.exists("habits.csv"):
     if chart_type == "Pie Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=False)
         fig = px.pie(df_sorted, names="Category", values="Total Minutes", title="Category Distribution", 
-                     height=650, color_discrete_sequence=colors)
+                     height=500, color_discrete_sequence=colors)
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Sunburst Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=False)
