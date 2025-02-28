@@ -9,11 +9,7 @@ import logging
 import time
 import streamlit.components.v1 as components
 
-# 檢查是否嵌入模式
-query_params = st.query_params
-is_embedded = "embed" in query_params and query_params["embed"] == "true"
-
-# 設置頁面為寬屏模式並初始收起側邊欄
+# 設置頁面為寬屏模式並初始收起側邊欄（必須是第一個 Streamlit 命令）
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
 # 自定義 CSS 實現響應式佈局與表格樣式統一
@@ -23,10 +19,6 @@ st.markdown(
     /* 減少頂部空白 */
     .block-container {
         padding-top: 1rem;
-        padding-left: 1rem;
-        padding-right: 1rem;
-        padding-bottom: 1rem;
-        max-width: 100%; /* 確保佔據全寬 */
     }
     /* 響應式 Grid 佈局 */
     .grid-container {
@@ -34,73 +26,56 @@ st.markdown(
         grid-template-columns: repeat(2, 1fr); /* 寬屏時兩列 */
         gap: 15px; /* 增加間距 */
         align-items: stretch; /* 確保子元素高度一致 */
-        width: 100%; /* 佔據全寬 */
-        height: 90vh; /* 自適應高度，佔據 90% 視口高度 */
     }
     @media (max-width: 1000px) { /* 窄屏斷點為 1000px */
         .grid-container {
             grid-template-columns: 1fr; /* 窄屏時一列 */
+        }
+        .chart-wrapper, .table-wrapper {
+            height: auto !important; /* 窄屏時自適應 */
         }
     }
     /* 當表格隱藏時，圖表佔據全寬 */
     .grid-container.no-table {
         grid-template-columns: 1fr; /* 圖表全寬 */
     }
-    /* 圖表和表格容器自適應高度 */
+    /* 確保圖表和表格容器高度匹配 */
     .chart-wrapper, .table-wrapper {
         display: flex;
         flex-direction: column;
-        height: 100%; /* 佔據 grid 容器的高度 */
-        width: 100%; /* 佔據全寬 */
+        height: auto; /* 自適應高度 */
     }
-    /* 統一表格樣式 */
+    /* 當表格顯示時，強制同步高度 */
+    .grid-container:not(.no-table) .chart-wrapper,
+    .grid-container:not(.no-table) .table-wrapper {
+        height: 400px; /* 統一基準高度，適應大多數圖表 */
+    }
+    /* 統一表格樣式（適用於 .legend-table 和 .styled-table） */
     .legend-table, .styled-table {
         width: 100%;
-        height: 100%; /* 佔據容器高度 */
         border-collapse: separate;
         border-spacing: 0;
-        border: 1px solid #444;
-        border-radius: 10px;
-        overflow: auto; /* 允許滾動 */
+        border: 1px solid #444; /* 統一邊框 */
+        border-radius: 10px; /* 統一圓角 */
+        overflow: hidden;
         font-family: 'Segoe UI', sans-serif;
-        font-size: 16px; /* 增大字體 */
-        background-color: rgba(1, 1, 1, 1);
+        font-size: 14px; /* 統一字體大小 */
+        background-color: rgba(1, 1, 1, 1); /* 統一背景 */
     }
     .legend-table th, .legend-table td, .styled-table th, .styled-table td {
         text-align: center;
-        padding: 0.5em; /* 增加內邊距 */
+        padding: 0.2em; /* 適中內邊距，避免過矮 */
     }
     .legend-table th, .styled-table th {
-        background-color: rgba(51, 51, 51, 0.7);
+        background-color: rgba(51, 51, 51, 0.7); /* 統一表頭背景 */
         color: #ddd;
         font-weight: 600;
     }
     .legend-table td, .styled-table td {
         color: #ddd;
     }
-    /* 嵌入模式優化 */
-    {}
     </style>
-    """.format(
-        """
-        body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden; /* 移除滾動條 */
-        }
-        .block-container {
-            height: 100vh; /* 佔據全屏高度 */
-            padding: 0.5rem;
-        }
-        .grid-container {
-            height: 95vh; /* 更大高度 */
-        }
-        h1 {
-            font-size: 2.5rem; /* 增大標題 */
-            margin-bottom: 0.5rem;
-        }
-        """ if is_embedded else ""
-    ),
+    """,
     unsafe_allow_html=True
 )
 
@@ -160,7 +135,7 @@ async def smart_retry(func, *args, **kwargs):
         try:
             return await func(*args, **kwargs)
         except aiohttp.ClientResponseError as e:
-            if e.status in [504, 502]:
+            if e.status in {504, 502}:
                 logging.warning(f"Server error {e.status} on attempt {attempt+1}/{MAX_RETRIES}")
             elif e.status == 429:
                 logging.warning(f"Rate limit exceeded on attempt {attempt+1}/{MAX_RETRIES}")
@@ -239,7 +214,7 @@ curve_option = st.sidebar.radio("Curve", ["Curved", "Straight"], index=0) if cha
 
 # 動態調整 Show Table 的標籤，並與狀態同步
 show_table_label = "Hide Table" if st.session_state["show_table"] else "Show Table"
-st.sidebar.checkbox(show_table_label, key="show_table")
+show_table = st.sidebar.checkbox(show_table_label, value=st.session_state["show_table"], key="show_table")
 
 # 數據更新邏輯
 if st.session_state["updating"]:
@@ -252,7 +227,7 @@ if st.session_state["updating"]:
         time.sleep(1)
         msg_placeholder.empty()
     st.session_state["updating"] = False
-    st.rerun()
+    st.rerun()  # 添加刷新以恢復按鈕
 
 # 數據可視化
 if os.path.exists("habits.csv"):
@@ -260,60 +235,60 @@ if os.path.exists("habits.csv"):
     
     # 圖表生成與顏色映射
     fig = None
-    color_map = {}
-    colors = px.colors.qualitative.Plotly
-    chart_height = 800 if is_embedded else 400  # 嵌入模式下增大高度
+    color_map = {}  # 在生成圖表時記錄顏色
+    colors = px.colors.qualitative.Plotly  # 使用 Plotly 的預設顏色序列
     if chart_type == "Pie Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=False)
         fig = px.pie(df_sorted, names="Category", values="Total Minutes", title="Category Distribution", 
-                     height=chart_height, color_discrete_sequence=colors)
+                     height=400, color_discrete_sequence=colors)
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Sunburst Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=False)
         fig = px.sunburst(df_sorted, path=["Category"], values="Total Minutes", title="Category vs Total Min", 
-                          height=chart_height, color="Category", color_discrete_map=color_map)
-        fig.update_traces(opacity=1.0)
+                          height=400, color_discrete_sequence=colors)
+        color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Line Chart":
         fig = px.line(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear",
-                      title="Category vs Total Min", height=chart_height, 
+                      title="Category vs Total Min", height=400, 
                       color_discrete_sequence=[primary_color]) if line_mode == "Line Chart" else \
               px.area(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear",
-                      title="Category vs Total Min", height=chart_height, 
+                      title="Category vs Total Min", height=400, 
                       color_discrete_sequence=[primary_color])
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df["Category"].unique())}
     elif chart_type == "Bar Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=True)
         fig = px.bar(df_sorted, x="Total Minutes" if orientation=="Horizontal" else "Category", y="Category" if orientation=="Horizontal" else "Total Minutes",
                      text="Total Minutes", title="Category vs Total Min", 
-                     height=chart_height, color_discrete_sequence=[primary_color])
+                     height=400, color_discrete_sequence=[primary_color])
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Bubble Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=True)
         fig = px.scatter(df_sorted, x="Category", y="Total Minutes", size="Total Minutes", color="Category", 
-                         title="Category vs Total Min", height=chart_height, 
+                         title="Category vs Total Min", height=400, 
                          color_discrete_sequence=colors)
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Scatter Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=True)
         fig = px.scatter(df_sorted, x="Total Minutes", y="Category", text="Total Minutes", title="Category vs Total Min", 
-                         height=chart_height, color_discrete_sequence=[primary_color])
+                         height=400, color_discrete_sequence=[primary_color])
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Box Plot":
         df_sorted = df.sort_values("Total Minutes", ascending=True)
         fig = px.box(df_sorted, x="Total Minutes" if orientation=="Horizontal" else "Category", y="Category" if orientation=="Horizontal" else "Total Minutes",
-                     title="Category vs Total Min", height=chart_height, 
+                     title="Category vs Total Min", height=400, 
                      color_discrete_sequence=[primary_color])
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Histogram":
         fig = px.histogram(df, x="Total Minutes" if orientation=="Horizontal" else "Category", title="Distribution", 
-                           height=chart_height, color_discrete_sequence=[primary_color])
+                           height=400, color_discrete_sequence=[primary_color])
     elif chart_type == "Tree Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=False)
         fig = px.treemap(df_sorted, path=["Category"], values="Total Minutes", title="Category vs Total Min", 
-                         height=chart_height, color_discrete_sequence=colors)
+                         height=400, color_discrete_sequence=colors)
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
 
     if fig:
+        # 根據圖表類型決定是否顯示內建 Legend
         show_legend = chart_type not in ["Pie Chart", "Sunburst Chart", "Bubble Chart", "Tree Chart"]
         fig.update_layout(
             title=dict(text=fig.layout.title.text, x=0.5, xanchor="center"),
@@ -329,6 +304,7 @@ if os.path.exists("habits.csv"):
             )
         )
         
+        # 響應式佈局容器
         grid_class = "grid-container no-table" if not st.session_state["show_table"] else "grid-container"
         with st.container():
             st.markdown(f'<div class="{grid_class}">', unsafe_allow_html=True)
