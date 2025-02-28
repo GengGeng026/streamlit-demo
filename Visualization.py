@@ -53,7 +53,7 @@ st.markdown(
     /* 當表格顯示時，強制同步高度 */
     .grid-container:not(.no-table) .chart-wrapper,
     .grid-container:not(.no-table) .table-wrapper {
-        height: 20vh; /* 放大至 80% 視口高度 */
+        height: 20vh; /* 放大至 20% 視口高度 */
     }
     /* 統一表格樣式 */
     .legend-table, .styled-table {
@@ -236,7 +236,7 @@ if st.session_state["updating"]:
         time.sleep(1)
         msg_placeholder.empty()
     st.session_state["updating"] = False
-    st.rerun()  # 添加刷新以恢復按鈕
+    st.rerun()
 
 # 數據可視化
 if os.path.exists("habits.csv"):
@@ -244,21 +244,21 @@ if os.path.exists("habits.csv"):
     
     # 圖表生成與顏色映射
     fig = None
-    color_map = {}  # 在生成圖表時記錄顏色
-    colors = px.colors.qualitative.Plotly  # 使用 Plotly 的預設顏色序列
+    color_map = {}
+    colors = px.colors.qualitative.Plotly
     if chart_type == "Pie Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=False)
         fig = px.pie(df_sorted, names="Category", values="Total Minutes", title="Category Distribution", 
-                     height=500, color_discrete_sequence=colors)
+                     height=650, color_discrete_sequence=colors)
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Sunburst Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=False)
         fig = px.sunburst(df_sorted, path=["Category"], values="Total Minutes", title="Category vs Total Min", 
-                          height=500, color_discrete_sequence=colors)
+                          height=650, color_discrete_sequence=colors)
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Line Chart":
         fig = px.line(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear",
-                      title="Category vs Total Min", height=500, 
+                      title="Category vs Total Min", height=650, 
                       color_discrete_sequence=[primary_color]) if line_mode == "Line Chart" else \
               px.area(df, x="Category", y="Total Minutes", line_shape="spline" if curve_option=="Curved" else "linear",
                       title="Category vs Total Min", height=650, 
@@ -268,37 +268,38 @@ if os.path.exists("habits.csv"):
         df_sorted = df.sort_values("Total Minutes", ascending=True)
         fig = px.bar(df_sorted, x="Total Minutes" if orientation=="Horizontal" else "Category", y="Category" if orientation=="Horizontal" else "Total Minutes",
                      text="Total Minutes", title="Category vs Total Min", 
-                     height=500, color_discrete_sequence=[primary_color])
+                     height=650, color_discrete_sequence=[primary_color])
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Bubble Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=True)
         fig = px.scatter(df_sorted, x="Category", y="Total Minutes", size="Total Minutes", color="Category", 
-                         title="Category vs Total Min", height=500, 
+                         title="Category vs Total Min", height=650, 
                          color_discrete_sequence=colors)
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Scatter Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=True)
         fig = px.scatter(df_sorted, x="Total Minutes", y="Category", text="Total Minutes", title="Category vs Total Min", 
-                         height=500, color_discrete_sequence=[primary_color])
+                         height=650, color_discrete_sequence=[primary_color])
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Box Plot":
         df_sorted = df.sort_values("Total Minutes", ascending=True)
         fig = px.box(df_sorted, x="Total Minutes" if orientation=="Horizontal" else "Category", y="Category" if orientation=="Horizontal" else "Total Minutes",
-                     title="Category vs Total Min", height=500, 
+                     title="Category vs Total Min", height=650, 
                      color_discrete_sequence=[primary_color])
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
     elif chart_type == "Histogram":
         fig = px.histogram(df, x="Total Minutes" if orientation=="Horizontal" else "Category", title="Distribution", 
-                           height=500, color_discrete_sequence=[primary_color])
+                           height=650, color_discrete_sequence=[primary_color])
     elif chart_type == "Tree Chart":
         df_sorted = df.sort_values("Total Minutes", ascending=False)
         fig = px.treemap(df_sorted, path=["Category"], values="Total Minutes", title="Category vs Total Min", 
-                         height=500, color_discrete_sequence=colors)
+                         height=650, color_discrete_sequence=colors)
         color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(df_sorted["Category"].unique())}
 
     if fig:
         # 根據圖表類型決定是否顯示內建 Legend
         show_legend = chart_type not in ["Pie Chart", "Sunburst Chart", "Bubble Chart", "Tree Chart"]
+        # 統一調整 Category 相關文字大小
         fig.update_layout(
             title=dict(text=fig.layout.title.text, x=0.5, xanchor="center"),
             margin=dict(l=20, r=20, t=50, b=20 if st.session_state["show_table"] else 50),
@@ -310,8 +311,19 @@ if os.path.exists("habits.csv"):
                 xanchor="auto",
                 x=1,
                 font=dict(size=12)
+            ),
+            xaxis=dict(
+                tickfont=dict(size=20)  # 增大 X 軸 Category 文字
+            ),
+            yaxis=dict(
+                tickfont=dict(size=20)  # 增大 Y 軸 Category 文字
             )
         )
+        # 僅對支持 textfont 的圖表類型應用
+        if chart_type in ["Pie Chart", "Sunburst Chart", "Tree Chart"]:
+            fig.update_traces(
+                textfont=dict(size=15)  # 增大標籤文字（如 Pie 的 Category）
+            )
         
         # 響應式佈局容器
         grid_class = "grid-container no-table" if not st.session_state["show_table"] else "grid-container"
