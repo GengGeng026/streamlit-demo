@@ -75,7 +75,7 @@ st.markdown(
     .legend-table th, .styled-table th {
         background-color: rgba(51, 51, 51, 0.7);
         color: #ddd;
-        font-weight: 600;
+        font-weight: 1000;
     }
     .legend-table td, .styled-table td {
         color: #ddd;
