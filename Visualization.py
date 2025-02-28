@@ -70,12 +70,12 @@ st.markdown(
     }
     .legend-table th, .legend-table td, .styled-table th, .styled-table td {
         text-align: center;
-        padding: 0.3em; /* 增大內邊距 */
+        padding: 0.4em; /* 增大內邊距 */
     }
     .legend-table th, .styled-table th {
         background-color: rgba(51, 51, 51, 0.7);
         color: #ddd;
-        font-weight: 1000;
+        font-weight: 600;
     }
     .legend-table td, .styled-table td {
         color: #ddd;
