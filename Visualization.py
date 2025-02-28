@@ -18,7 +18,7 @@ st.markdown(
     <style>
     /* 主容器預留邊距 */
     .block-container {
-        padding: 0.5rem 3rem; /* 四周 1rem 邊距 */
+        padding: 0.5rem 10rem; /* 四周 1rem 邊距 */
         margin: 0;
         max-width: 100%;
         min-height: 100vh; /* 確保填滿視口 */
@@ -58,7 +58,7 @@ st.markdown(
     /* 統一表格樣式 */
     .legend-table, .styled-table {
         width: 100%;
-        height: 10vh; /* 與圖表一致 */
+        height: 60vh; /* 與圖表一致 */
         border-collapse: separate;
         border-spacing: 0;
         border: 1px solid #444;
@@ -81,7 +81,7 @@ st.markdown(
         color: #ddd;
     }
     h1 {
-        margin-bottom: 0.5rem; /* 標題底部留少量空間 */
+        margin-bottom: 0.1rem; /* 標題底部留少量空間 */
     }
     </style>
     """,
