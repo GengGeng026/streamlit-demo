@@ -53,12 +53,12 @@ st.markdown(
     /* 當表格顯示時，強制同步高度 */
     .grid-container:not(.no-table) .chart-wrapper,
     .grid-container:not(.no-table) .table-wrapper {
-        height: 80vh; /* 放大至 80% 視口高度 */
+        height: 20vh; /* 放大至 80% 視口高度 */
     }
     /* 統一表格樣式 */
     .legend-table, .styled-table {
         width: 100%;
-        height: 60vh; /* 與圖表一致 */
+        height: 10vh; /* 與圖表一致 */
         border-collapse: separate;
         border-spacing: 0;
         border: 1px solid #444;
