@@ -70,7 +70,7 @@ st.markdown(
     }
     .legend-table th, .legend-table td, .styled-table th, .styled-table td {
         text-align: center;
-        padding: 0.1em; /* 增大內邊距 */
+        padding: 0.3em; /* 增大內邊距 */
     }
     .legend-table th, .styled-table th {
         background-color: rgba(51, 51, 51, 0.7);
